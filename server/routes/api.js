@@ -427,6 +427,21 @@ router.get("/payment/paypal/config", (req, res) => {
 router.post("/payment/paypal/create-order", async (req, res) => {
   let pendingOrder = null;
   try {
+    // Country Routing: Indian domestic customers MUST pay via Razorpay (INR)
+    const customerCountry = String(
+      req.body?.shippingAddress?.countryCode ||
+      req.body?.customer?.countryCode ||
+      req.body?.countryCode ||
+      ""
+    ).trim().toUpperCase();
+
+    if (customerCountry === "IN") {
+      return res.status(400).json({
+        success: false,
+        message: "Domestic orders within India must be processed via Razorpay (INR) in accordance with Indian payment gateway regulations."
+      });
+    }
+
     // Enforce PayPal environment & credential safety before creating any order
     paypalService.assertEnvironmentSafety();
 
@@ -673,7 +688,34 @@ router.post("/payment/paypal/webhook", async (req, res) => {
       }
     }
 
-    if (eventType === "PAYMENT.CAPTURE.COMPLETED") {
+    if (eventType === "CHECKOUT.ORDER.APPROVED") {
+      // Automatic capture if checkout order was approved on PayPal but client disconnect occurred
+      const resource = event.resource;
+      const paypalOrderId = resource?.id;
+      const purchaseUnit = resource?.purchase_units?.[0];
+      const orderNumber = purchaseUnit?.custom_id || purchaseUnit?.reference_id;
+
+      if (paypalOrderId && orderNumber) {
+        try {
+          const existing = await orderService.getOrder(orderNumber).catch(() => null);
+          if (existing && existing.payment?.status !== "PAID") {
+            const captureData = await paypalService.captureOrder(paypalOrderId);
+            const capObj = captureData?.purchase_units?.[0]?.payments?.captures?.[0];
+            const capId = capObj?.id || paypalOrderId;
+            if (capObj?.status === "COMPLETED" || captureData?.status === "COMPLETED") {
+              await orderService.markOrderAsPaid({
+                orderNumber,
+                paypalOrderId,
+                paypalCaptureId: capId,
+                paymentDetails: captureData
+              });
+            }
+          }
+        } catch (capErr) {
+          console.warn("[PayPal Webhook] Auto-capture on CHECKOUT.ORDER.APPROVED notice:", capErr.message);
+        }
+      }
+    } else if (eventType === "PAYMENT.CAPTURE.COMPLETED") {
       const resource = event.resource;
       const orderNumber = resource?.custom_id || resource?.invoice_id;
       const captureId = resource?.id;
@@ -701,6 +743,36 @@ router.post("/payment/paypal/webhook", async (req, res) => {
       const orderNumber = resource?.custom_id || resource?.invoice_id;
       if (orderNumber) {
         await orderService.markOrderAsFailed(orderNumber, `PayPal Webhook: ${eventType}`);
+      }
+    } else if (eventType === "PAYMENT.CAPTURE.REFUNDED") {
+      const resource = event.resource;
+      const orderNumber = resource?.custom_id || resource?.invoice_id;
+      const refundId = resource?.id;
+      const amount = resource?.amount?.value;
+      const currency = resource?.amount?.currency_code;
+      const reason = resource?.status_details?.reason || "PayPal Webhook Refund";
+
+      if (orderNumber) {
+        await orderService.markOrderAsRefunded(orderNumber, {
+          refundId,
+          amount,
+          currency,
+          reason,
+          details: resource
+        });
+      }
+    } else if (eventType === "PAYMENT.CAPTURE.REVERSED") {
+      const resource = event.resource;
+      const orderNumber = resource?.custom_id || resource?.invoice_id;
+      const reversalId = resource?.id;
+      const reason = resource?.status_details?.reason || "PayPal Webhook Reversal / Chargeback";
+
+      if (orderNumber) {
+        await orderService.markOrderAsReversed(orderNumber, {
+          reversalId,
+          reason,
+          details: resource
+        });
       }
     }
 

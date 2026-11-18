@@ -18,18 +18,18 @@ interface CurrencyContextType {
 
 const defaultFallbackRatesAgainstINR: Record<string, number> = {
   INR: 1.0,
-  USD: 0.010379,
-  EUR: 0.009228,
-  GBP: 0.007854,
-  AED: 0.038116,
-  SAR: 0.038921,
-  CAD: 0.014791,
-  AUD: 0.014939,
-  ZAR: 0.173245,
-  NGN: 14.195452,
-  SGD: 0.01352,
-  JPY: 1.5732,
-  CHF: 0.00951
+  USD: 0.01156,
+  EUR: 0.01093,
+  GBP: 0.00922,
+  AED: 0.04246,
+  SAR: 0.04338,
+  CAD: 0.01653,
+  AUD: 0.01835,
+  ZAR: 0.2085,
+  NGN: 18.25,
+  SGD: 0.01563,
+  JPY: 1.7857,
+  CHF: 0.01042
 };
 
 const defaultCountry: Country = {

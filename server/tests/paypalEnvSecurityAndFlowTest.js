@@ -215,27 +215,62 @@ async function runTests() {
     console.log(`  ✔ PASS: Sandbox OAuth OK & Sandbox Order ${createData.orderID} created for ${createData.orderNumber}.\n`);
 
     // -----------------------------------------------------------------
-    // TEST 4: INR -> USD conversion & Real Sandbox unapproved capture failure
+    // TEST 4: Domestic Indian Rejection & International Non-PayPal Currency Conversion (AED -> USD)
     // -----------------------------------------------------------------
-    console.log("TEST 4: Currency conversion (INR -> USD) & real Sandbox unapproved capture failure...");
-    const inrRes = await fetch(`${baseUrl}/api/payment/paypal/create-order`, {
+    console.log("TEST 4: Domestic Indian routing rejection & international non-PayPal currency conversion...");
+    
+    // 4A: Domestic Indian order attempt on PayPal must be rejected
+    const domesticIndianRes = await fetch(`${baseUrl}/api/payment/paypal/create-order`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" },
       body: JSON.stringify(buildSamplePayload(testProduct.id, "INR"))
     });
-    const inrData = await inrRes.json();
-    createdOrderNumbers.push(inrData.orderNumber);
-    assert.strictEqual(inrData.currency, "USD");
+    assert.strictEqual(domesticIndianRes.status, 400);
+    const domesticIndianData = await domesticIndianRes.json();
+    assert.strictEqual(domesticIndianData.success, false);
+    assert.ok(domesticIndianData.message.includes("Razorpay"));
+    console.log("  ✔ PASS: Domestic Indian order correctly rejected from PayPal (must use Razorpay INR).");
+
+    // 4B: International order using currency not directly supported by PayPal (e.g. AED) converts to USD
+    const intlPayload = {
+      ...buildSamplePayload(testProduct.id, "AED"),
+      customer: {
+        fullName: "Dr. Tariq Al-Mansoor",
+        email: "tariq@dubaimedical.ae",
+        phone: "+971 50 123 4567",
+        countryCode: "AE"
+      },
+      shippingAddress: {
+        fullName: "Dr. Tariq Al-Mansoor",
+        addressLine1: "Dubai Healthcare City, Building 64",
+        city: "Dubai",
+        state: "Dubai",
+        postalCode: "00000",
+        country: "United Arab Emirates",
+        countryCode: "AE"
+      },
+      currency: "AED"
+    };
+
+    const intlRes = await fetch(`${baseUrl}/api/payment/paypal/create-order`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" },
+      body: JSON.stringify(intlPayload)
+    });
+    assert.strictEqual(intlRes.status, 200);
+    const intlData = await intlRes.json();
+    createdOrderNumbers.push(intlData.orderNumber);
+    assert.strictEqual(intlData.currency, "USD");
 
     const failCapRes = await fetch(`${baseUrl}/api/payment/paypal/capture-order`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderID: inrData.orderID, orderNumber: inrData.orderNumber })
+      body: JSON.stringify({ orderID: intlData.orderID, orderNumber: intlData.orderNumber })
     });
     assert.strictEqual(failCapRes.status, 400);
-    const failedDoc = await orderService.getOrder(inrData.orderNumber);
+    const failedDoc = await orderService.getOrder(intlData.orderNumber);
     assert.strictEqual(failedDoc.payment.status, "FAILED");
-    console.log("  ✔ PASS: INR -> USD conversion & unapproved capture rejection verified.\n");
+    console.log("  ✔ PASS: International non-PayPal currency -> USD conversion & unapproved capture rejection verified.\n");
 
     // -----------------------------------------------------------------
     // TEST 5: Cancelled payment handling

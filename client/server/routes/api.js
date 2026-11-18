@@ -49,13 +49,8 @@ router.get("/products", async (req, res) => {
     // Strictly ensure only active, non-archived products are on public storefront
     list = list.filter(p => (p.status || "ACTIVE") === "ACTIVE" && p.status !== "ARCHIVED" && !p.isRetired && p.inCatalogue !== false && !deletedIds.has(String(p.id)));
 
-    // Review-gated publishing rule: unreviewed products in review-gated categories (e.g. physiotherapy) remain unpublished from customer storefront
-    list = list.filter(p => {
-      if (p.category === "physiotherapy" && p.reviewStatus !== "CORRECT") {
-        return false;
-      }
-      return true;
-    });
+    // Website visibility rule: ONLY CORRECT products display on the public storefront
+    list = list.filter(p => p.reviewStatus === "CORRECT");
 
     // Handle additional query filters that might be on storefront
     if (req.query.subcategory && req.query.subcategory !== "ALL") {
@@ -68,30 +63,112 @@ router.get("/products", async (req, res) => {
   }
 });
 
+/**
+ * Lightweight Randomized Homepage Showcase Endpoint
+ * Returns N randomly selected active, non-deleted, CORRECT products without sending the full catalogue.
+ */
+router.get("/products/random", async (req, res) => {
+  try {
+    const requestedLimit = Number(req.query.limit || 12);
+    const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(24, Math.floor(requestedLimit))) : 12;
+
+    res.set("Cache-Control", "no-store, max-age=0");
+    const deletedIds = mongoService.isConfigured() ? await mongoService.getDeletedProductIds() : new Set();
+    let list = [];
+
+    if (mongoService.isConfigured()) {
+      try {
+        const mongoList = await mongoService.getProductsFromMongo();
+        if (Array.isArray(mongoList)) {
+          list = mongoList.filter(m => !deletedIds.has(String(m.id)));
+        } else {
+          list = store.getProducts({}).filter(p => !deletedIds.has(String(p.id)));
+        }
+      } catch (mErr) {
+        list = store.getProducts({}).filter(p => !deletedIds.has(String(p.id)));
+      }
+    } else {
+      list = store.getProducts({}).filter(p => !deletedIds.has(String(p.id)));
+    }
+
+    // Strict storefront visibility & uniqueness filter
+    const seenIds = new Set();
+    const eligible = [];
+    for (const p of list) {
+      if (!p || !p.id) continue;
+      const pid = String(p.id);
+      if (seenIds.has(pid) || deletedIds.has(pid)) continue;
+      if ((p.status || "ACTIVE") !== "ACTIVE" || p.status === "ARCHIVED" || p.isRetired || p.inCatalogue === false) continue;
+      if (p.reviewStatus !== "CORRECT") continue;
+      seenIds.add(pid);
+      eligible.push(p);
+    }
+
+    // Fisher-Yates shuffle on server
+    for (let i = eligible.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = eligible[i];
+      eligible[i] = eligible[j];
+      eligible[j] = tmp;
+    }
+
+    const picked = eligible.slice(0, limit).map((p) => ({
+      id: p.id,
+      slug: p.slug,
+      title: p.title || p.productName,
+      productName: p.productName || p.title,
+      category: p.category,
+      categoryName: p.categoryName,
+      subcategory: p.subcategory,
+      brand: p.brand,
+      sku: p.sku || p.SKU,
+      primaryImage: p.primaryImage,
+      images: Array.isArray(p.images) ? p.images.slice(0, 1) : [],
+      galleryImages: Array.isArray(p.galleryImages) ? p.galleryImages.slice(0, 1) : [],
+      basePrice: Number(p.basePrice || 0),
+      salePrice: p.salePrice !== undefined ? Number(p.salePrice) : undefined,
+      regularPrice: p.regularPrice !== undefined ? Number(p.regularPrice) : undefined,
+      originalPrice: p.originalPrice !== undefined ? Number(p.originalPrice) : undefined,
+      discountPercentage: p.discountPercentage !== undefined ? Number(p.discountPercentage) : undefined,
+      priceStatus: p.priceStatus,
+      referencePricing: p.referencePricing,
+      stock: p.stock,
+      stockStatus: p.stockStatus,
+      status: p.status,
+      reviewStatus: p.reviewStatus
+    }));
+
+    res.json({
+      success: true,
+      count: picked.length,
+      totalAvailable: eligible.length,
+      products: picked
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 router.get("/products/:slug", async (req, res) => {
   try {
     res.set("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=600");
     const slugOrId = req.params.slug;
-    const deletedIds = mongoService.isConfigured() ? await mongoService.getDeletedProductIds() : new Set();
 
     let product = null;
     if (mongoService.isConfigured()) {
       try {
-        const mongoProd = await mongoService.getApprovedProduct(slugOrId);
-        if (mongoProd && !deletedIds.has(String(mongoProd.id))) {
-          product = mongoProd;
-        }
+        product = await mongoService.getApprovedProduct(slugOrId);
       } catch (mErr) {}
     }
 
     // Fallback: Check canonical product lookup if not directly found in MongoDB by raw slug
     if (!product) {
       const storeProduct = store.getProductBySlug(slugOrId) || store.getProductById(slugOrId, true);
-      if (storeProduct && !deletedIds.has(String(storeProduct.id))) {
+      if (storeProduct) {
         if (mongoService.isConfigured()) {
           try {
             const mongoById = await mongoService.getApprovedProduct(storeProduct.id);
-            if (mongoById && !deletedIds.has(String(mongoById.id))) {
+            if (mongoById) {
               product = mongoById;
             } else if (!mongoService.isConfigured()) {
               product = storeProduct;
@@ -105,11 +182,12 @@ router.get("/products/:slug", async (req, res) => {
       }
     }
 
-    if (!product || product.status === "ARCHIVED" || product.isRetired || product.inCatalogue === false || deletedIds.has(String(product.id))) {
+    if (!product || product.status === "ARCHIVED" || product.isRetired || product.inCatalogue === false) {
       return res.status(404).json({ success: false, message: "Product not found" });
     }
 
-    if (product.category === "physiotherapy" && product.reviewStatus !== "CORRECT") {
+    // Website visibility rule: ONLY CORRECT products are visible on the public storefront
+    if (product.reviewStatus !== "CORRECT") {
       return res.status(404).json({ success: false, message: "Product not found" });
     }
     res.json({ success: true, product });
@@ -349,6 +427,21 @@ router.get("/payment/paypal/config", (req, res) => {
 router.post("/payment/paypal/create-order", async (req, res) => {
   let pendingOrder = null;
   try {
+    // Country Routing: Indian domestic customers MUST pay via Razorpay (INR)
+    const customerCountry = String(
+      req.body?.shippingAddress?.countryCode ||
+      req.body?.customer?.countryCode ||
+      req.body?.countryCode ||
+      ""
+    ).trim().toUpperCase();
+
+    if (customerCountry === "IN") {
+      return res.status(400).json({
+        success: false,
+        message: "Domestic orders within India must be processed via Razorpay (INR) in accordance with Indian payment gateway regulations."
+      });
+    }
+
     // Enforce PayPal environment & credential safety before creating any order
     paypalService.assertEnvironmentSafety();
 
@@ -577,6 +670,7 @@ router.post("/payment/paypal/webhook", async (req, res) => {
     const eventType = event.event_type;
     console.log(`[PayPal Webhook] Received event: ${eventType}`);
 
+    // If PAYPAL_WEBHOOK_ID is configured, verify official PayPal cryptographic signature
     const webhookId = (process.env.PAYPAL_WEBHOOK_ID || "").trim();
     if (webhookId) {
       const verified = await paypalService.verifyWebhookSignature({
@@ -594,7 +688,34 @@ router.post("/payment/paypal/webhook", async (req, res) => {
       }
     }
 
-    if (eventType === "PAYMENT.CAPTURE.COMPLETED") {
+    if (eventType === "CHECKOUT.ORDER.APPROVED") {
+      // Automatic capture if checkout order was approved on PayPal but client disconnect occurred
+      const resource = event.resource;
+      const paypalOrderId = resource?.id;
+      const purchaseUnit = resource?.purchase_units?.[0];
+      const orderNumber = purchaseUnit?.custom_id || purchaseUnit?.reference_id;
+
+      if (paypalOrderId && orderNumber) {
+        try {
+          const existing = await orderService.getOrder(orderNumber).catch(() => null);
+          if (existing && existing.payment?.status !== "PAID") {
+            const captureData = await paypalService.captureOrder(paypalOrderId);
+            const capObj = captureData?.purchase_units?.[0]?.payments?.captures?.[0];
+            const capId = capObj?.id || paypalOrderId;
+            if (capObj?.status === "COMPLETED" || captureData?.status === "COMPLETED") {
+              await orderService.markOrderAsPaid({
+                orderNumber,
+                paypalOrderId,
+                paypalCaptureId: capId,
+                paymentDetails: captureData
+              });
+            }
+          }
+        } catch (capErr) {
+          console.warn("[PayPal Webhook] Auto-capture on CHECKOUT.ORDER.APPROVED notice:", capErr.message);
+        }
+      }
+    } else if (eventType === "PAYMENT.CAPTURE.COMPLETED") {
       const resource = event.resource;
       const orderNumber = resource?.custom_id || resource?.invoice_id;
       const captureId = resource?.id;
@@ -622,6 +743,36 @@ router.post("/payment/paypal/webhook", async (req, res) => {
       const orderNumber = resource?.custom_id || resource?.invoice_id;
       if (orderNumber) {
         await orderService.markOrderAsFailed(orderNumber, `PayPal Webhook: ${eventType}`);
+      }
+    } else if (eventType === "PAYMENT.CAPTURE.REFUNDED") {
+      const resource = event.resource;
+      const orderNumber = resource?.custom_id || resource?.invoice_id;
+      const refundId = resource?.id;
+      const amount = resource?.amount?.value;
+      const currency = resource?.amount?.currency_code;
+      const reason = resource?.status_details?.reason || "PayPal Webhook Refund";
+
+      if (orderNumber) {
+        await orderService.markOrderAsRefunded(orderNumber, {
+          refundId,
+          amount,
+          currency,
+          reason,
+          details: resource
+        });
+      }
+    } else if (eventType === "PAYMENT.CAPTURE.REVERSED") {
+      const resource = event.resource;
+      const orderNumber = resource?.custom_id || resource?.invoice_id;
+      const reversalId = resource?.id;
+      const reason = resource?.status_details?.reason || "PayPal Webhook Reversal / Chargeback";
+
+      if (orderNumber) {
+        await orderService.markOrderAsReversed(orderNumber, {
+          reversalId,
+          reason,
+          details: resource
+        });
       }
     }
 

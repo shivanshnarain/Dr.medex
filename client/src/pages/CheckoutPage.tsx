@@ -163,7 +163,7 @@ export const CheckoutPage: React.FC = () => {
   const [forgotPasswordFeedback, setForgotPasswordFeedback] = useState<{ type: "error" | "success"; message: string } | null>(null);
 
   // Step 3 Payment Method Selection (PayPal, Razorpay)
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"PAYPAL" | "RAZORPAY">("PAYPAL");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"PAYPAL" | "RAZORPAY">("RAZORPAY");
   const [isRazorpayLoading, setIsRazorpayLoading] = useState(false);
   const [isCodLoading, setIsCodLoading] = useState(false);
 
@@ -246,6 +246,41 @@ export const CheckoutPage: React.FC = () => {
   const [paypalSdkLoadError, setPaypalSdkLoadError] = useState("");
   const paypalButtonContainerRef = useRef<HTMLDivElement>(null);
   const paypalButtonsInstanceRef = useRef<any>(null);
+  const buildOrderPayloadRef = useRef<any>(null);
+  const isCapturingRef = useRef<boolean>(false);
+
+  // Synchronize payment gateway routing: Indian domestic customers -> Razorpay (INR); International -> PayPal
+  useEffect(() => {
+    if (countryCode === "IN") {
+      setSelectedPaymentMethod("RAZORPAY");
+    } else {
+      setSelectedPaymentMethod("PAYPAL");
+    }
+  }, [countryCode]);
+
+  // Safety timer to prevent perpetual PROCESSING state
+  useEffect(() => {
+    let timer: any;
+    if (isProcessing) {
+      timer = setTimeout(() => {
+        setIsProcessing(false);
+        isCapturingRef.current = false;
+      }, 35000);
+    }
+    return () => clearTimeout(timer);
+  }, [isProcessing]);
+
+  // Bfcache page restoration (safari / mobile browser back button returns)
+  useEffect(() => {
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        setIsProcessing(false);
+        isCapturingRef.current = false;
+      }
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
 
   // 1. Fetch Complete 195 Worldwide Countries List on Mount
   useEffect(() => {
@@ -839,11 +874,11 @@ export const CheckoutPage: React.FC = () => {
   const discountINR = useMemo(() => {
     if (!appliedCoupon) return 0;
     const raw = (subtotalINR * (appliedCoupon.discountPercent || 0)) / 100;
-    const maxDiscountINR = (appliedCoupon.maxDiscountUSD || 999999) / (exchangeRates["USD"] || 0.010379);
+    const maxDiscountINR = (appliedCoupon.maxDiscountUSD || 999999) / (exchangeRates["USD"] || 0.01156);
     return Math.min(raw, maxDiscountINR);
   }, [subtotalINR, appliedCoupon, exchangeRates]);
 
-  const shippingCostINR = selectedShippingMethod.costUSD / (exchangeRates["USD"] || 0.010379);
+  const shippingCostINR = selectedShippingMethod.costUSD / (exchangeRates["USD"] || 0.01156);
   const grandTotalINR = Math.max(0, subtotalINR - discountINR + shippingCostINR);
 
   // Converted values for display
@@ -862,7 +897,7 @@ export const CheckoutPage: React.FC = () => {
     return PAYPAL_SUPPORTED.has(curr) ? curr : "USD";
   }, [currentCurrency]);
 
-  const paypalRate = exchangeRates[paypalCurrency] || 0.010379;
+  const paypalRate = exchangeRates[paypalCurrency] || 0.01156;
   const paypalAmount = grandTotalINR * paypalRate;
 
   // Step 1 Validation: Customer Details (First Name, Last Name, Email, Phone)
@@ -1034,6 +1069,8 @@ export const CheckoutPage: React.FC = () => {
       }))
     };
   };
+
+  buildOrderPayloadRef.current = buildOrderPayload;
 
   // Step 1: Customer Authentication Handlers
   const handleStep1SignIn = async (e: React.FormEvent) => {
@@ -1289,29 +1326,49 @@ export const CheckoutPage: React.FC = () => {
     if (!validateStep1() || !validateStep2()) {
       return;
     }
+    if (isProcessing) return; // Prevent duplicate rapid clicks
     setIsProcessing(true);
     setErrorMessage("");
 
     try {
-      const payload = buildOrderPayload("PayPal Express Checkout", "PAYPAL");
+      const payload = buildOrderPayloadRef.current
+        ? buildOrderPayloadRef.current("PayPal Express Checkout", "PAYPAL")
+        : buildOrderPayload("PayPal Express Checkout", "PAYPAL");
+
       const res = await fetch("/api/payment/paypal/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error("Unable to connect to PayPal server. Please verify your connection or try again.");
+      }
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to initiate PayPal checkout. Please try again or select another payment method.");
+      }
+
       const checkoutBase = data.mode === "live" ? "https://www.paypal.com" : "https://www.sandbox.paypal.com";
       const approvalUrl =
         data.approvalUrl ||
         (data.orderID ? `${checkoutBase}/checkoutnow?token=${data.orderID}` : null);
 
-      if (!res.ok || !data.success || !approvalUrl) {
-        throw new Error(data.message || "Failed to initiate PayPal checkout. Please try again or select another payment method.");
+      if (!approvalUrl) {
+        throw new Error("PayPal payment approval URL could not be generated. Please try again or contact support.");
       }
 
       sessionStorage.setItem("drmedex_paypal_pending_order", data.orderNumber);
       sessionStorage.setItem("drmedex_paypal_order_id", data.orderID);
+
+      // Reset isProcessing after 8s fallback if redirect is slow or interrupted
+      setTimeout(() => {
+        setIsProcessing(false);
+      }, 8000);
 
       // Redirect user directly to the official PayPal hosted payment page
       window.location.href = approvalUrl;
@@ -1350,8 +1407,16 @@ export const CheckoutPage: React.FC = () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ orderID: token, orderNumber: orderNum })
         })
-          .then((res) => res.json())
+          .then(async (res) => {
+            const text = await res.text();
+            try {
+              return JSON.parse(text);
+            } catch {
+              throw new Error("Unable to parse capture response.");
+            }
+          })
           .then((data) => {
+            setIsProcessing(false);
             if (data.success && data.order) {
               setCompletedOrder(data.order);
               clearCart();
@@ -1360,12 +1425,11 @@ export const CheckoutPage: React.FC = () => {
               window.scrollTo({ top: 0, behavior: "smooth" });
             } else {
               setErrorMessage(data.message || "Failed to complete PayPal payment capture. Please try again or contact support.");
-              setIsProcessing(false);
             }
           })
           .catch((err) => {
-            setErrorMessage(err.message || "Network error while completing PayPal payment.");
             setIsProcessing(false);
+            setErrorMessage(err.message || "Network error while completing PayPal payment.");
           });
       }
     } else if (params.get("paypal_cancel") === "1") {
@@ -1378,6 +1442,7 @@ export const CheckoutPage: React.FC = () => {
           body: JSON.stringify({ orderNumber: cancelOrderNum, orderID: cancelToken })
         }).catch(() => {});
       }
+      setIsProcessing(false);
       setErrorMessage("PayPal checkout was cancelled. You can review your order or select another payment method.");
       setCurrentStep(3);
     }
@@ -1467,7 +1532,8 @@ export const CheckoutPage: React.FC = () => {
       return;
     }
 
-    paypalButtonContainerRef.current.innerHTML = "";
+    const container = paypalButtonContainerRef.current;
+    container.innerHTML = "";
 
     try {
       const buttons = window.paypal.Buttons({
@@ -1487,42 +1553,56 @@ export const CheckoutPage: React.FC = () => {
           setIsProcessing(true);
           setErrorMessage("");
 
-          const payload = buildOrderPayload("PayPal Express Checkout", "PAYPAL");
+          try {
+            const payload = buildOrderPayloadRef.current
+              ? buildOrderPayloadRef.current("PayPal Express Checkout", "PAYPAL")
+              : buildOrderPayload("PayPal Express Checkout", "PAYPAL");
 
-          const res = await fetch("/api/payment/paypal/create-order", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          });
+            const res = await fetch("/api/payment/paypal/create-order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
 
-          const data = await res.json();
-          setIsProcessing(false);
+            const text = await res.text();
+            let data: any = {};
+            try {
+              data = JSON.parse(text);
+            } catch {
+              throw new Error("Unable to parse server response. Please verify network or contact support.");
+            }
 
-          if (!res.ok || !data.success || !data.orderID) {
-            throw new Error(data.message || "Could not initialize PayPal order.");
+            if (!res.ok || !data.success || !data.orderID) {
+              throw new Error(data.message || "Could not initialize PayPal order.");
+            }
+
+            sessionStorage.setItem("drmedex_pending_order_number", data.orderNumber);
+
+            if (saveAddressToAccount && user?.id) {
+              handleSaveAddress({
+                fullName: fullName.trim(),
+                companyName,
+                phone,
+                addressLine1,
+                addressLine2,
+                city,
+                state,
+                postalCode,
+                country: activeCountry.name,
+                countryCode
+              }).catch(() => {});
+            }
+
+            return data.orderID;
+          } catch (err: any) {
+            setIsProcessing(false);
+            throw err;
           }
-
-          sessionStorage.setItem("drmedex_pending_order_number", data.orderNumber);
-
-          if (saveAddressToAccount && user?.id) {
-            handleSaveAddress({
-              fullName: fullName.trim(),
-              companyName,
-              phone,
-              addressLine1,
-              addressLine2,
-              city,
-              state,
-              postalCode,
-              country: activeCountry.name,
-              countryCode
-            }).catch(() => {});
-          }
-
-          return data.orderID;
         },
 
         onApprove: async (data: any) => {
+          if (isCapturingRef.current) return;
+          isCapturingRef.current = true;
           setIsProcessing(true);
           setErrorMessage("");
           const orderNumber = sessionStorage.getItem("drmedex_pending_order_number");
@@ -1537,14 +1617,21 @@ export const CheckoutPage: React.FC = () => {
               })
             });
 
-            const captureData = await captureRes.json();
-            setIsProcessing(false);
+            const text = await captureRes.text();
+            let captureData: any = {};
+            try {
+              captureData = JSON.parse(text);
+            } catch {
+              throw new Error("Invalid response received from capture server.");
+            }
 
             if (captureRes.ok && captureData.success && captureData.order) {
               setCompletedOrder(captureData.order);
               clearCart();
               localStorage.removeItem(GUEST_CHECKOUT_STORAGE_KEY);
               sessionStorage.removeItem("drmedex_pending_order_number");
+              sessionStorage.removeItem("drmedex_paypal_pending_order");
+              sessionStorage.removeItem("drmedex_paypal_order_id");
               window.scrollTo({ top: 0, behavior: "smooth" });
             } else {
               setErrorMessage(
@@ -1553,8 +1640,10 @@ export const CheckoutPage: React.FC = () => {
               );
             }
           } catch (err: any) {
-            setIsProcessing(false);
             setErrorMessage(`Error finalizing transaction: ${err.message || "Network timeout"}`);
+          } finally {
+            setIsProcessing(false);
+            isCapturingRef.current = false;
           }
         },
 
@@ -1568,57 +1657,30 @@ export const CheckoutPage: React.FC = () => {
             }).catch(() => {});
           }
           setIsProcessing(false);
+          isCapturingRef.current = false;
           setErrorMessage("PayPal checkout was cancelled. Your details and cart remain safely saved.");
         },
 
         onError: (err: any) => {
           setIsProcessing(false);
+          isCapturingRef.current = false;
           console.error("PayPal Buttons Runtime Error:", err);
-          setErrorMessage(
-            typeof err === "string"
-              ? err
-              : err?.message || "A payment error occurred with PayPal. Please try again or contact support."
-          );
+          const rawMsg = typeof err === "string" ? err : err?.message || "";
+          const friendlyMsg = rawMsg.includes("expected pattern")
+            ? "PayPal was unable to initialize your session. Please check your details or click PAY ONLINE below."
+            : rawMsg || "A payment error occurred with PayPal. Please try again or contact support.";
+          setErrorMessage(friendlyMsg);
         }
       });
 
       paypalButtonsInstanceRef.current = buttons;
-      buttons.render(paypalButtonContainerRef.current);
+      buttons.render(container).catch((err: any) => {
+        console.warn("PayPal button render caught:", err);
+      });
     } catch (err: any) {
       console.error("PayPal render error:", err);
     }
-  }, [
-    currentStep,
-    selectedPaymentMethod,
-    isPaypalSdkLoaded,
-    fullName,
-    professionalTitle,
-    email,
-    phone,
-    companyName,
-    department,
-    taxId,
-    addressLine1,
-    addressLine2,
-    buildingSuite,
-    district,
-    city,
-    state,
-    postalCode,
-    countryCode,
-    billingSameAsShipping,
-    billingFullName,
-    billingAddressLine1,
-    billingCity,
-    billingPostalCode,
-    billingCountryCode,
-    currentCurrency,
-    appliedCoupon,
-    items,
-    saveAddressToAccount,
-    user?.id,
-    activeCountry.name
-  ]);
+  }, [currentStep, selectedPaymentMethod, isPaypalSdkLoaded, paypalCurrency, paypalClientId]);
 
   // Filtered countries for searchable dropdown
   const { popularCountries, alphabeticalCountries } = useMemo(() => {
@@ -2823,69 +2885,92 @@ export const CheckoutPage: React.FC = () => {
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {/* Method 1: PayPal */}
-                    <div
-                      onClick={() => setSelectedPaymentMethod("PAYPAL")}
-                      className={`p-4 rounded-xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${
-                        selectedPaymentMethod === "PAYPAL"
-                          ? "border-[#7AA05A] bg-[#F4F7F2]/60 ring-2 ring-[#7AA05A]/20"
-                          : "border-neutral-200 bg-white hover:border-neutral-300"
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <img src="/images/paypal-mark.png" alt="PayPal" className="h-6 w-auto object-contain" />
-                            <span className="font-extrabold text-sm text-[#003087]">PayPal</span>
-                          </div>
-                          <span
-                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                              selectedPaymentMethod === "PAYPAL"
-                                ? "border-[#2D5A4A] bg-[#2D5A4A]"
-                                : "border-neutral-300"
-                            }`}
-                          >
-                            {selectedPaymentMethod === "PAYPAL" && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  {countryCode === "IN" ? (
+                    <div className="p-4.5 rounded-xl border-2 border-[#7AA05A] bg-[#F4F7F2]/60 ring-2 ring-[#7AA05A]/20">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <img src="/images/razorpay-mark.png" alt="Razorpay" className="h-6 w-auto object-contain" />
+                          <span className="font-extrabold text-sm text-[#0C2340]">Razorpay Secure</span>
+                          <span className="text-[10px] font-bold bg-[#7AA05A] text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
+                            Domestic Indian Gateway
                           </span>
                         </div>
-                        <p className="text-2xs text-neutral-500 mt-1 leading-relaxed">
-                          PayPal balance and international card payments.
-                        </p>
+                        <span className="w-4 h-4 rounded-full border-2 border-[#2D5A4A] bg-[#2D5A4A] flex items-center justify-center">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                        </span>
                       </div>
+                      <p className="text-2xs text-neutral-600 mt-1 leading-relaxed">
+                        Domestic Indian orders are processed in INR via UPI (Google Pay, PhonePe, Paytm), RuPay, Debit/Credit Cards, and Net Banking.
+                      </p>
                     </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      {/* Method 1: PayPal */}
+                      <div
+                        onClick={() => setSelectedPaymentMethod("PAYPAL")}
+                        className={`p-4 rounded-xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${
+                          selectedPaymentMethod === "PAYPAL"
+                            ? "border-[#7AA05A] bg-[#F4F7F2]/60 ring-2 ring-[#7AA05A]/20"
+                            : "border-neutral-200 bg-white hover:border-neutral-300"
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <img src="/images/paypal-mark.png" alt="PayPal" className="h-6 w-auto object-contain" />
+                              <span className="font-extrabold text-sm text-[#003087]">PayPal</span>
+                              <span className="text-[10px] font-bold bg-[#003087] text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                International
+                              </span>
+                            </div>
+                            <span
+                              className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                selectedPaymentMethod === "PAYPAL"
+                                  ? "border-[#2D5A4A] bg-[#2D5A4A]"
+                                  : "border-neutral-300"
+                              }`}
+                            >
+                              {selectedPaymentMethod === "PAYPAL" && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </span>
+                          </div>
+                          <p className="text-2xs text-neutral-500 mt-1 leading-relaxed">
+                            PayPal balance and international credit/debit cards ({paypalCurrency}).
+                          </p>
+                        </div>
+                      </div>
 
-                    {/* Method 2: Razorpay */}
-                    <div
-                      onClick={() => setSelectedPaymentMethod("RAZORPAY")}
-                      className={`p-4 rounded-xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${
-                        selectedPaymentMethod === "RAZORPAY"
-                          ? "border-[#7AA05A] bg-[#F4F7F2]/60 ring-2 ring-[#7AA05A]/20"
-                          : "border-neutral-200 bg-white hover:border-neutral-300"
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <img src="/images/razorpay-mark.png" alt="Razorpay" className="h-6 w-auto object-contain" />
-                            <span className="font-extrabold text-sm text-[#0C2340]">Razorpay</span>
+                      {/* Method 2: Razorpay (Cards) */}
+                      <div
+                        onClick={() => setSelectedPaymentMethod("RAZORPAY")}
+                        className={`p-4 rounded-xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${
+                          selectedPaymentMethod === "RAZORPAY"
+                            ? "border-[#7AA05A] bg-[#F4F7F2]/60 ring-2 ring-[#7AA05A]/20"
+                            : "border-neutral-200 bg-white hover:border-neutral-300"
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <img src="/images/razorpay-mark.png" alt="Razorpay" className="h-6 w-auto object-contain" />
+                              <span className="font-extrabold text-sm text-[#0C2340]">Credit / Debit Cards</span>
+                            </div>
+                            <span
+                              className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                selectedPaymentMethod === "RAZORPAY"
+                                  ? "border-[#2D5A4A] bg-[#2D5A4A]"
+                                  : "border-neutral-300"
+                              }`}
+                            >
+                              {selectedPaymentMethod === "RAZORPAY" && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </span>
                           </div>
-                          <span
-                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                              selectedPaymentMethod === "RAZORPAY"
-                                ? "border-[#2D5A4A] bg-[#2D5A4A]"
-                                : "border-neutral-300"
-                            }`}
-                          >
-                            {selectedPaymentMethod === "RAZORPAY" && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                          </span>
+                          <p className="text-2xs text-neutral-500 mt-1 leading-relaxed">
+                            International Visa, Mastercard, and global card payments.
+                          </p>
                         </div>
-                        <p className="text-2xs text-neutral-500 mt-1 leading-relaxed">
-                          UPI, GPay, PhonePe, cards, Visa, Mastercard, RuPay and Net Banking.
-                        </p>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* PAYPAL PAYMENT GATEWAY CONTAINER */}
@@ -2907,8 +2992,13 @@ export const CheckoutPage: React.FC = () => {
                             ${paypalAmount.toFixed(2)} {paypalCurrency}
                           </span>
                         </div>
-                        <div className="text-3xs text-neutral-500">
-                          Base catalogue total: ₹{grandTotalINR.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (settled in {paypalCurrency} via PayPal international conversion).
+                        <div className="text-3xs text-neutral-500 space-y-1">
+                          <div>
+                            Base catalogue total: ₹{grandTotalINR.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (settled in {paypalCurrency} via PayPal international conversion).
+                          </div>
+                          <div className="text-neutral-400 font-mono">
+                            Conversion rate: 1 INR ≈ {paypalRate.toFixed(6)} {paypalCurrency} (1 {paypalCurrency} ≈ ₹{(1 / (paypalRate || 1)).toFixed(2)})
+                          </div>
                         </div>
                       </div>
 
@@ -3238,6 +3328,11 @@ export const CheckoutPage: React.FC = () => {
                 <div className="text-lg sm:text-2xl font-black text-black font-mono leading-tight">
                   {formatPrice(grandTotalINR)}
                 </div>
+                {selectedPaymentMethod === "PAYPAL" && (
+                  <div className="text-2xs font-extrabold text-[#2D5A4A] font-mono">
+                    ≈ ${paypalAmount.toFixed(2)} {paypalCurrency}
+                  </div>
+                )}
               </div>
 
               <button

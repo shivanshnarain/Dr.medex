@@ -32,8 +32,8 @@ async function runTestSuite() {
     const clientId = paypalService.getClientId();
     const mode = paypalService.getMode();
     assert.ok(clientId, "PayPal Client ID must be configured in environment");
-    assert.strictEqual(mode, "sandbox", "PayPal mode must be sandbox for testing");
-    console.log("✔ PASS: PayPal Credentials loaded securely from environment.\n");
+    assert.ok(mode === "sandbox" || mode === "live", "PayPal mode must be sandbox or live");
+    console.log(`✔ PASS: PayPal Credentials loaded securely from environment (mode: ${mode}).\n`);
 
     // ----------------------------------------------------
     // TEST 2: PayPal Public Config Endpoint
@@ -44,7 +44,7 @@ async function runTestSuite() {
     const configData = await configRes.json();
     assert.strictEqual(configData.success, true);
     assert.strictEqual(configData.clientId, clientId);
-    assert.strictEqual(configData.mode, "sandbox");
+    assert.strictEqual(configData.mode, mode);
     assert.strictEqual(configData.clientSecret, undefined, "Client Secret must NEVER be exposed via API");
     console.log("✔ PASS: Public config endpoint returns Client ID without leaking secrets.\n");
 

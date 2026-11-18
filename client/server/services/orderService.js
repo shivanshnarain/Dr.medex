@@ -111,10 +111,11 @@ function validateAndCalculateOrder(payload) {
     const foundCoupon = coupons.find(c => c.code.toUpperCase() === cleanCode);
     if (foundCoupon) {
       appliedCoupon = foundCoupon;
-      const minRequiredINR = (foundCoupon.minOrderUSD || 0) / (currencyService.getRateForCurrency("USD") || 0.010379);
+      const usdRate = currencyService.getRateForCurrency("USD") || 0.01156;
+      const minRequiredINR = (foundCoupon.minOrderUSD || 0) / usdRate;
       if (totalBaseINR >= minRequiredINR) {
         const rawDiscount = (totalBaseINR * (foundCoupon.discountPercent || 0)) / 100;
-        const maxDiscountINR = (foundCoupon.maxDiscountUSD || 999999) / (currencyService.getRateForCurrency("USD") || 0.010379);
+        const maxDiscountINR = (foundCoupon.maxDiscountUSD || 999999) / usdRate;
         discountINR = Math.min(rawDiscount, maxDiscountINR);
       }
     }
@@ -122,8 +123,9 @@ function validateAndCalculateOrder(payload) {
 
   // 4. Calculate shipping
   // Free standard shipping or express rate
+  const usdRate = currencyService.getRateForCurrency("USD") || 0.01156;
   const shippingINR = payload.shippingMethod?.costUSD
-    ? (payload.shippingMethod.costUSD / (currencyService.getRateForCurrency("USD") || 0.010379))
+    ? (payload.shippingMethod.costUSD / usdRate)
     : 0;
 
   // 5. Grand total in INR
@@ -168,6 +170,7 @@ function generateOrderNumber() {
  */
 async function createPendingOrder(payload) {
   await ensureIndexes();
+  await currencyService.syncLiveRates().catch(() => {});
   const { items, pricing } = validateAndCalculateOrder(payload);
 
   const orderNumber = generateOrderNumber();
@@ -218,6 +221,7 @@ async function createPendingOrder(payload) {
     customer,
     shippingAddress,
     billingAddress,
+    deliveryInstructions: payload.deliveryInstructions || "",
     items,
     pricing,
     shippingMethod: payload.shippingMethod || {
@@ -519,6 +523,82 @@ async function markOrderAsPendingReview(orderNumber, { paypalOrderId, paypalCapt
     if (paypalCaptureId) order.payment.paypalCaptureId = paypalCaptureId;
     order.payment.pendingReason = pendingReason;
     order.payment.details = paymentDetails || order.payment.details;
+    order.updatedAt = now;
+  }
+  return order || null;
+}
+
+/**
+ * Mark order as REFUNDED (or PARTIALLY_REFUNDED) via PayPal Webhook
+ */
+async function markOrderAsRefunded(orderNumber, { refundId, amount, currency, reason, details } = {}) {
+  if (!orderNumber) return null;
+  const now = new Date().toISOString();
+  try {
+    const client = await getClient();
+    const db = client.db();
+    await db.collection(ORDERS_COLLECTION).updateOne(
+      { orderNumber },
+      {
+        $set: {
+          "payment.status": "REFUNDED",
+          "payment.refundId": refundId || null,
+          "payment.refundAmount": amount || null,
+          "payment.refundCurrency": currency || null,
+          "payment.refundReason": reason || "PayPal Webhook Refund",
+          "payment.refundDetails": details || null,
+          orderStatus: "REFUNDED",
+          status: "REFUNDED",
+          updatedAt: now
+        }
+      }
+    );
+  } catch (err) {}
+
+  const order = store.getOrderById(orderNumber);
+  if (order && order.payment) {
+    order.payment.status = "REFUNDED";
+    order.payment.refundId = refundId || null;
+    order.payment.refundAmount = amount || null;
+    order.payment.refundCurrency = currency || null;
+    order.orderStatus = "REFUNDED";
+    order.status = "REFUNDED";
+    order.updatedAt = now;
+  }
+  return order || null;
+}
+
+/**
+ * Mark order as REVERSED / DISPUTED via PayPal Webhook
+ */
+async function markOrderAsReversed(orderNumber, { reversalId, reason, details } = {}) {
+  if (!orderNumber) return null;
+  const now = new Date().toISOString();
+  try {
+    const client = await getClient();
+    const db = client.db();
+    await db.collection(ORDERS_COLLECTION).updateOne(
+      { orderNumber },
+      {
+        $set: {
+          "payment.status": "REVERSED",
+          "payment.reversalId": reversalId || null,
+          "payment.reversalReason": reason || "PayPal Webhook Reversal",
+          "payment.reversalDetails": details || null,
+          orderStatus: "DISPUTED",
+          status: "DISPUTED",
+          updatedAt: now
+        }
+      }
+    );
+  } catch (err) {}
+
+  const order = store.getOrderById(orderNumber);
+  if (order && order.payment) {
+    order.payment.status = "REVERSED";
+    order.payment.reversalId = reversalId || null;
+    order.orderStatus = "DISPUTED";
+    order.status = "DISPUTED";
     order.updatedAt = now;
   }
   return order || null;
@@ -930,6 +1010,8 @@ module.exports = {
   markOrderAsFailed,
   markOrderAsCancelled,
   markOrderAsPendingReview,
+  markOrderAsRefunded,
+  markOrderAsReversed,
   getCustomerOrders,
   getOrder,
   getCustomerAddresses,

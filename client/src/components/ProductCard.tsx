@@ -5,7 +5,7 @@ import { Product } from "../types";
 import { useWishlist } from "../context/WishlistContext";
 import { useCurrency } from "../context/CurrencyContext";
 import { renderBrandTitle } from "./BrandTitle";
-import { optimizeCloudinaryUrl } from "../lib/imageUtils";
+import { optimizeCloudinaryUrl, extractImageUrl } from "../lib/imageUtils";
 import { prewarmProduct } from "../services/productService";
 
 interface ProductCardProps {
@@ -161,7 +161,6 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({ product }) 
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       className="group relative bg-white rounded-2xl border border-neutral-200/90 hover:border-neutral-300 hover:shadow-md transition-all duration-200 flex flex-col justify-between h-full p-3 sm:p-4"
-      style={{ contentVisibility: "auto", containIntrinsicSize: "auto 450px" }}
     >
       {/* 1. SQUARE PRODUCT IMAGE AREA (1:1 aspect ratio across all viewports, clean container without inner grey border, object-cover for true edge-to-edge square presentation) */}
       <div
@@ -185,10 +184,21 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({ product }) 
                     idx === currentImageIndex ? "opacity-100 z-1" : "opacity-0 z-0 pointer-events-none"
                   }`}
                   style={{ objectFit: "cover", objectPosition: "center" }}
-                  loading={idx === 0 ? "lazy" : "lazy"}
+                  loading={idx === 0 ? "eager" : "lazy"}
                   decoding="async"
-                  onError={() => {
-                    if (idx === 0 && allImages.length === 1) setImageFailed(true);
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (target.dataset.triedFallback !== "true") {
+                      target.dataset.triedFallback = "true";
+                      const raw = extractImageUrl((product.images && product.images[idx]) || product.primaryImage);
+                      if (raw && target.src !== raw) {
+                        target.src = raw;
+                        return;
+                      }
+                    }
+                    if (allImages.length <= 1 || idx === currentImageIndex) {
+                      setImageFailed(true);
+                    }
                   }}
                 />
               ))}
