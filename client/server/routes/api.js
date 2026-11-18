@@ -333,24 +333,55 @@ router.get("/track/:orderId", (req, res) => {
 
 // PAYPAL PAYMENT GATEWAY ENDPOINTS
 router.get("/payment/paypal/config", (req, res) => {
+  const pub = paypalService.getPublicConfig();
   res.json({
     success: true,
-    clientId: paypalService.getClientId(),
-    mode: paypalService.getMode()
+    clientId: pub.clientId,
+    mode: pub.mode,
+    configured: pub.configured,
+    hasClientId: pub.hasClientId,
+    hasClientSecret: pub.hasClientSecret,
+    environment: pub.environment,
+    ...(pub.warning ? { warning: pub.warning } : {})
   });
 });
 
 router.post("/payment/paypal/create-order", async (req, res) => {
+  let pendingOrder = null;
   try {
-    const pendingOrder = await orderService.createPendingOrder(req.body);
+    // Enforce PayPal environment & credential safety before creating any order
+    paypalService.assertEnvironmentSafety();
+
+    const rawOrigin = req.headers.origin || req.headers.referer || "https://drmedex.vercel.app";
+    let origin = "https://drmedex.vercel.app";
+    try {
+      origin = new URL(rawOrigin).origin;
+    } catch {
+      origin = "https://drmedex.vercel.app";
+    }
+
+    pendingOrder = await orderService.createPendingOrder(req.body);
+    const returnUrl = `${origin}/checkout?paypal_return=1&orderNumber=${encodeURIComponent(pendingOrder.orderNumber)}`;
+    const cancelUrl = `${origin}/checkout?paypal_cancel=1&orderNumber=${encodeURIComponent(pendingOrder.orderNumber)}`;
+
     const paypalOrder = await paypalService.createOrder({
       orderNumber: pendingOrder.orderNumber,
       amount: pendingOrder.pricing.grandTotal,
       currency: pendingOrder.pricing.currency,
       description: `DR.MEDEX Medical Equipment Order #${pendingOrder.orderNumber}`,
       items: pendingOrder.items,
-      customer: pendingOrder.customer
+      customer: pendingOrder.customer,
+      returnUrl,
+      cancelUrl
     });
+
+    await orderService.attachPayPalOrderId(pendingOrder.orderNumber, paypalOrder.id);
+
+    const approvalUrl =
+      paypalOrder.links?.find((l) => l.rel === "approve")?.href ||
+      (paypalOrder.id
+        ? `${paypalService.getCheckoutBaseUrl()}/checkoutnow?token=${paypalOrder.id}`
+        : null);
 
     res.json({
       success: true,
@@ -358,55 +389,183 @@ router.post("/payment/paypal/create-order", async (req, res) => {
       orderNumber: pendingOrder.orderNumber,
       currency: pendingOrder.pricing.currency,
       amount: pendingOrder.pricing.grandTotal,
+      mode: paypalService.getMode(),
+      approvalUrl,
       pendingOrder
     });
   } catch (err) {
-    console.error("[PayPal API] Create Order Error:", err);
-    res.status(400).json({ success: false, message: err.message });
+    console.error("[PayPal API] Create Order Error:", err.message);
+    if (pendingOrder && pendingOrder.orderNumber) {
+      await orderService.markOrderAsFailed(pendingOrder.orderNumber, `PayPal Create Failed: ${err.message}`).catch(() => {});
+    }
+    const statusCode = err.code === "SANDBOX_BLOCKED_IN_PRODUCTION" || err.code === "LIVE_BLOCKED_IN_NON_PRODUCTION" ? 503 : 400;
+    res.status(statusCode).json({ success: false, message: err.message });
   }
 });
 
 router.post("/payment/paypal/capture-order", async (req, res) => {
-  const { orderID, orderNumber } = req.body;
+  const { orderID, orderNumber } = req.body || {};
   try {
-    if (!orderID) {
+    if (!orderID || typeof orderID !== "string" || !orderID.trim()) {
       return res.status(400).json({ success: false, message: "orderID is required." });
     }
-    const captureData = await paypalService.captureOrder(orderID);
-    if (captureData.status !== "COMPLETED") {
-      if (orderNumber) {
-        await orderService.markOrderAsFailed(orderNumber, `PayPal Status: ${captureData.status}`);
+
+    const cleanOrderId = orderID.trim();
+
+    // Idempotency guard: if order is already verified PAID for this PayPal order, return safely without duplicate capture
+    let existingOrder = null;
+    if (orderNumber) {
+      existingOrder = await orderService.getOrder(orderNumber).catch(() => null);
+    }
+    if (!existingOrder) {
+      existingOrder = await orderService.getOrder(cleanOrderId).catch(() => null);
+    }
+    if (existingOrder && existingOrder.payment?.status === "PAID") {
+      if (!existingOrder.payment.paypalOrderId || existingOrder.payment.paypalOrderId === cleanOrderId) {
+        return res.json({
+          success: true,
+          alreadyCaptured: true,
+          status: "COMPLETED",
+          order: existingOrder
+        });
       }
-      return res.status(400).json({
+    }
+
+    const captureData = await paypalService.captureOrder(cleanOrderId);
+    const purchaseUnit = captureData.purchase_units?.[0];
+    const captureObj = purchaseUnit?.payments?.captures?.[0] || null;
+    const captureStatus = captureObj?.status || captureData.status;
+
+    const resolvedOrderNumber =
+      orderNumber ||
+      purchaseUnit?.custom_id ||
+      purchaseUnit?.reference_id ||
+      existingOrder?.orderNumber;
+
+    // Handle PENDING capture cleanly (do NOT mark as PAID or FAILED)
+    if (captureStatus === "PENDING" || captureData.status === "PENDING") {
+      if (resolvedOrderNumber) {
+        await orderService.markOrderAsPendingReview(resolvedOrderNumber, {
+          paypalOrderId: cleanOrderId,
+          paypalCaptureId: captureObj?.id || null,
+          reason: captureObj?.status_details?.reason || "PayPal payment is pending settlement",
+          paymentDetails: captureData
+        });
+      }
+      return res.status(202).json({
         success: false,
-        message: `PayPal payment not completed. Status: ${captureData.status}`,
-        captureData
+        pending: true,
+        status: "PENDING",
+        message: "PayPal payment is pending verification. Your order will be confirmed automatically once funds settle.",
+        orderNumber: resolvedOrderNumber || null
       });
     }
 
-    const captureId = captureData.purchase_units?.[0]?.payments?.captures?.[0]?.id || orderID;
-    const resolvedOrderNumber =
-      orderNumber ||
-      captureData.purchase_units?.[0]?.custom_id ||
-      captureData.purchase_units?.[0]?.reference_id;
+    if (captureData.status !== "COMPLETED" || (captureObj && captureObj.status !== "COMPLETED")) {
+      if (resolvedOrderNumber) {
+        await orderService.markOrderAsFailed(resolvedOrderNumber, `PayPal Status: ${captureStatus}`);
+      }
+      return res.status(400).json({
+        success: false,
+        status: captureStatus,
+        message: `PayPal payment not completed. Status: ${captureStatus}`
+      });
+    }
 
+    // Re-fetch stored order if not loaded earlier, and verify currency & amount consistency
+    if (!existingOrder && resolvedOrderNumber) {
+      existingOrder = await orderService.getOrder(resolvedOrderNumber).catch(() => null);
+    }
+    if (existingOrder && captureObj?.amount) {
+      const capturedCurrency = String(captureObj.amount.currency_code || "").toUpperCase();
+      const expectedCurrency = String(existingOrder.pricing?.currency || "USD").toUpperCase();
+      const capturedAmount = Number(captureObj.amount.value);
+      const expectedAmount = Number(existingOrder.pricing?.grandTotal || 0);
+
+      if (capturedCurrency && capturedCurrency !== expectedCurrency) {
+        await orderService.markOrderAsFailed(
+          resolvedOrderNumber,
+          `Currency mismatch: expected ${expectedCurrency}, captured ${capturedCurrency}`
+        );
+        return res.status(400).json({
+          success: false,
+          message: `Payment currency mismatch (${capturedCurrency} vs ${expectedCurrency}).`
+        });
+      }
+
+      if (Number.isFinite(capturedAmount) && expectedAmount > 0 && Math.abs(capturedAmount - expectedAmount) > 0.02) {
+        await orderService.markOrderAsFailed(
+          resolvedOrderNumber,
+          `Amount mismatch: expected ${expectedAmount.toFixed(2)}, captured ${capturedAmount.toFixed(2)}`
+        );
+        return res.status(400).json({
+          success: false,
+          message: "Payment amount does not match the server-calculated order total."
+        });
+      }
+    }
+
+    const captureId = captureObj?.id || cleanOrderId;
     const paidOrder = await orderService.markOrderAsPaid({
       orderNumber: resolvedOrderNumber,
-      paypalOrderId: orderID,
+      paypalOrderId: cleanOrderId,
       paypalCaptureId: captureId,
       paymentDetails: captureData
     });
 
     res.json({
       success: true,
+      status: "COMPLETED",
+      captureId,
       order: paidOrder,
       captureData
     });
   } catch (err) {
-    console.error("[PayPal API] Capture Order Error:", err);
+    console.error("[PayPal API] Capture Order Error:", err.message);
     if (orderNumber) {
-      await orderService.markOrderAsFailed(orderNumber, err.message);
+      await orderService.markOrderAsFailed(orderNumber, err.message).catch(() => {});
     }
+    const statusCode = err.httpStatus && err.httpStatus >= 400 && err.httpStatus < 500 ? 400 : 500;
+    res.status(statusCode).json({ success: false, message: err.message });
+  }
+});
+
+// PAYPAL CHECKOUT CANCELLATION HANDLER
+router.post("/payment/paypal/cancel-order", async (req, res) => {
+  try {
+    const { orderNumber, orderID, reason } = req.body || {};
+    let targetOrderNumber = orderNumber;
+    if (!targetOrderNumber && orderID) {
+      const found = await orderService.getOrder(orderID).catch(() => null);
+      if (found) targetOrderNumber = found.orderNumber;
+    }
+
+    if (!targetOrderNumber) {
+      return res.status(400).json({ success: false, message: "orderNumber or orderID is required." });
+    }
+
+    const existing = await orderService.getOrder(targetOrderNumber).catch(() => null);
+    if (existing && existing.payment?.status === "PAID") {
+      return res.json({
+        success: false,
+        message: "Order has already been paid and cannot be cancelled via checkout cancellation.",
+        order: existing
+      });
+    }
+
+    const cancelled = await orderService.markOrderAsCancelled(
+      targetOrderNumber,
+      reason || "PayPal checkout cancelled by customer"
+    );
+
+    res.json({
+      success: true,
+      status: "CANCELLED",
+      orderNumber: targetOrderNumber,
+      order: cancelled
+    });
+  } catch (err) {
+    console.error("[PayPal API] Cancel Order Error:", err.message);
     res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -414,9 +573,26 @@ router.post("/payment/paypal/capture-order", async (req, res) => {
 // PAYPAL WEBHOOK LISTENER
 router.post("/payment/paypal/webhook", async (req, res) => {
   try {
-    const event = req.body;
+    const event = req.body || {};
     const eventType = event.event_type;
     console.log(`[PayPal Webhook] Received event: ${eventType}`);
+
+    const webhookId = (process.env.PAYPAL_WEBHOOK_ID || "").trim();
+    if (webhookId) {
+      const verified = await paypalService.verifyWebhookSignature({
+        webhookId,
+        transmissionId: req.headers["paypal-transmission-id"],
+        transmissionTime: req.headers["paypal-transmission-time"],
+        certUrl: req.headers["paypal-cert-url"],
+        authAlgo: req.headers["paypal-auth-algo"],
+        transmissionSig: req.headers["paypal-transmission-sig"],
+        webhookEvent: event
+      });
+      if (!verified) {
+        console.warn("[PayPal Webhook] Rejected unverified webhook signature");
+        return res.status(401).json({ received: false, message: "Invalid PayPal webhook signature" });
+      }
+    }
 
     if (eventType === "PAYMENT.CAPTURE.COMPLETED") {
       const resource = event.resource;
@@ -427,6 +603,17 @@ router.post("/payment/paypal/webhook", async (req, res) => {
           orderNumber,
           paypalOrderId: resource?.supplementary_data?.related_ids?.order_id || null,
           paypalCaptureId: captureId,
+          paymentDetails: resource
+        });
+      }
+    } else if (eventType === "PAYMENT.CAPTURE.PENDING") {
+      const resource = event.resource;
+      const orderNumber = resource?.custom_id || resource?.invoice_id;
+      if (orderNumber) {
+        await orderService.markOrderAsPendingReview(orderNumber, {
+          paypalOrderId: resource?.supplementary_data?.related_ids?.order_id || null,
+          paypalCaptureId: resource?.id || null,
+          reason: resource?.status_details?.reason || "PayPal Webhook: PAYMENT.CAPTURE.PENDING",
           paymentDetails: resource
         });
       }

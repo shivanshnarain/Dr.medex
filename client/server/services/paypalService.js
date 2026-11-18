@@ -12,8 +12,25 @@ function stripQuotes(val) {
   return String(val || "").trim().replace(/^["']|["']$/g, "").trim();
 }
 
+function getMode() {
+  const raw = stripQuotes(process.env.PAYPAL_MODE || "sandbox").toLowerCase();
+  return raw || "sandbox";
+}
+
 function getClientId() {
+  const mode = getMode();
+  if (mode === "live") {
+    return stripQuotes(
+      process.env.PAYPAL_LIVE_CLIENT_ID ||
+      process.env.PAYPAL_CLIENT_ID ||
+      process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ||
+      process.env.REACT_APP_PAYPAL_CLIENT_ID ||
+      process.env.PAYPAL_CLIENT ||
+      ""
+    );
+  }
   return stripQuotes(
+    process.env.PAYPAL_SANDBOX_CLIENT_ID ||
     process.env.PAYPAL_CLIENT_ID ||
     process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ||
     process.env.REACT_APP_PAYPAL_CLIENT_ID ||
@@ -23,18 +40,25 @@ function getClientId() {
 }
 
 function getClientSecret() {
+  const mode = getMode();
+  if (mode === "live") {
+    return stripQuotes(
+      process.env.PAYPAL_LIVE_CLIENT_SECRET ||
+      process.env.PAYPAL_CLIENT_SECRET ||
+      process.env.PAYPAL_SECRET_KEY ||
+      process.env["paypal-secret_key"] ||
+      process.env.PAYPAL_SECRET ||
+      ""
+    );
+  }
   return stripQuotes(
+    process.env.PAYPAL_SANDBOX_CLIENT_SECRET ||
     process.env.PAYPAL_CLIENT_SECRET ||
     process.env.PAYPAL_SECRET_KEY ||
     process.env["paypal-secret_key"] ||
     process.env.PAYPAL_SECRET ||
     ""
   );
-}
-
-function getMode() {
-  const raw = stripQuotes(process.env.PAYPAL_MODE || "sandbox").toLowerCase();
-  return raw || "sandbox";
 }
 
 function getDeploymentEnv() {
@@ -50,11 +74,14 @@ function getDeploymentEnv() {
 /**
  * Validate PayPal mode & deployment environment safety.
  * - Never silently use Sandbox credentials in Production (VERCEL_ENV === "production").
- * - Never silently use Live credentials in Development or Preview environments.
+ * - Never silently use Live credentials in Vercel Preview or Vercel Development deployments.
+ * - Locally (without VERCEL_ENV), honors explicit PAYPAL_MODE ("sandbox" or "live") so developers
+ *   can maintain and test both credential sets safely.
  */
 function checkEnvironmentSafety() {
   const mode = getMode();
   const env = getDeploymentEnv();
+  const vercelEnv = stripQuotes(process.env.VERCEL_ENV || "").toLowerCase();
 
   if (mode !== "sandbox" && mode !== "live") {
     return {
@@ -78,7 +105,7 @@ function checkEnvironmentSafety() {
   }
 
   if (
-    (env === "development" || env === "preview") &&
+    (vercelEnv === "development" || vercelEnv === "preview") &&
     mode === "live" &&
     process.env.PAYPAL_ALLOW_LIVE_IN_NON_PROD !== "true"
   ) {
@@ -86,7 +113,7 @@ function checkEnvironmentSafety() {
       safe: false,
       code: "LIVE_BLOCKED_IN_NON_PRODUCTION",
       reason:
-        `Refusing to silently use PayPal Live mode in "${env}" environment. Configure Sandbox credentials and PAYPAL_MODE=sandbox.`
+        `Refusing to silently use PayPal Live mode in Vercel "${vercelEnv}" environment. Configure Sandbox credentials and PAYPAL_MODE=sandbox.`
     };
   }
 

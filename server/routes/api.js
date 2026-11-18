@@ -430,12 +430,12 @@ router.post("/payment/paypal/create-order", async (req, res) => {
     // Enforce PayPal environment & credential safety before creating any order
     paypalService.assertEnvironmentSafety();
 
-    const rawOrigin = req.headers.origin || req.headers.referer || "https://dr-medex.vercel.app";
-    let origin = "https://dr-medex.vercel.app";
+    const rawOrigin = req.headers.origin || req.headers.referer || "https://drmedex.vercel.app";
+    let origin = "https://drmedex.vercel.app";
     try {
       origin = new URL(rawOrigin).origin;
     } catch {
-      origin = "https://dr-medex.vercel.app";
+      origin = "https://drmedex.vercel.app";
     }
 
     pendingOrder = await orderService.createPendingOrder(req.body);
