@@ -417,6 +417,9 @@ router.get("/payment/paypal/config", (req, res) => {
     clientId: pub.clientId,
     mode: pub.mode,
     configured: pub.configured,
+    hasClientId: pub.hasClientId,
+    hasClientSecret: pub.hasClientSecret,
+    environment: pub.environment,
     ...(pub.warning ? { warning: pub.warning } : {})
   });
 });

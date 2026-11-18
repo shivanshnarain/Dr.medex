@@ -65,11 +65,15 @@ function checkEnvironmentSafety() {
   }
 
   if (env === "production" && mode !== "live") {
+    const rawMode = stripQuotes(process.env.PAYPAL_MODE || "");
+    const detail = rawMode
+      ? `PAYPAL_MODE is currently "${mode}" in Production.`
+      : "PAYPAL_MODE is not set in Production (defaulted to sandbox).";
     return {
       safe: false,
       code: "SANDBOX_BLOCKED_IN_PRODUCTION",
       reason:
-        "PayPal Live credentials are not configured for Production. Refusing to silently run Sandbox mode in Production."
+        `PayPal Live credentials are not configured for Production (${detail}) Refusing to silently run Sandbox mode in Production.`
     };
   }
 
@@ -120,15 +124,18 @@ function getCheckoutBaseUrl() {
  */
 function getPublicConfig() {
   const clientId = getClientId();
-  const hasSecret = Boolean(getClientSecret());
+  const hasClientId = Boolean(clientId);
+  const hasClientSecret = Boolean(getClientSecret());
   const mode = getMode();
   const safety = checkEnvironmentSafety();
-  const configured = Boolean(clientId && hasSecret && safety.safe);
+  const configured = Boolean(hasClientId && hasClientSecret && safety.safe);
 
   return {
     clientId: configured ? clientId : "",
     mode,
     configured,
+    hasClientId,
+    hasClientSecret,
     environment: getDeploymentEnv(),
     ...(safety.safe ? {} : { warning: safety.reason })
   };
@@ -183,7 +190,11 @@ async function getAccessToken() {
     } catch {
       // Never include raw credentials in error text
     }
-    throw new Error(`PayPal OAuth authentication failed (HTTP ${res.status}): ${errorDesc}`);
+    const modeHint =
+      res.status === 401
+        ? ` Verify that PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET are genuine PayPal ${currentMode.toUpperCase()} credentials matching PAYPAL_MODE=${currentMode}.`
+        : "";
+    throw new Error(`PayPal OAuth authentication failed (HTTP ${res.status}): ${errorDesc}.${modeHint}`);
   }
 
   const data = await res.json();
