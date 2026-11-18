@@ -442,6 +442,14 @@ router.post("/payment/paypal/create-order", async (req, res) => {
       });
     }
 
+    const PAYPAL_RESTRICTED_COUNTRIES = ["CU", "IR", "KP", "SY", "RU", "BY", "SD", "SS", "AF"];
+    if (PAYPAL_RESTRICTED_COUNTRIES.includes(customerCountry)) {
+      return res.status(400).json({
+        success: false,
+        message: `PayPal is unavailable for orders to ${customerCountry} due to international payment service restrictions. Please use International Credit / Debit Card.`
+      });
+    }
+
     // Enforce PayPal environment & credential safety before creating any order
     paypalService.assertEnvironmentSafety();
 
@@ -663,13 +671,15 @@ router.post("/payment/paypal/cancel-order", async (req, res) => {
   }
 });
 
-// PAYPAL WEBHOOK LISTENER
-router.post("/payment/paypal/webhook", async (req, res) => {
+// PAYPAL WEBHOOK LISTENER (Mounted on both /payment/paypal/webhook and /paypal/webhook)
+router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => {
   try {
     const event = req.body || {};
     const eventType = event.event_type;
-    console.log(`[PayPal Webhook] Received event: ${eventType}`);
+    const eventId = event.id;
+    console.log(`[PayPal Webhook] Received event: ${eventId} (${eventType})`);
 
+    // 1. Signature Verification
     // If PAYPAL_WEBHOOK_ID is configured, verify official PayPal cryptographic signature
     const webhookId = (process.env.PAYPAL_WEBHOOK_ID || "").trim();
     if (webhookId) {
@@ -683,10 +693,28 @@ router.post("/payment/paypal/webhook", async (req, res) => {
         webhookEvent: event
       });
       if (!verified) {
-        console.warn("[PayPal Webhook] Rejected unverified webhook signature");
+        console.warn(`[PayPal Webhook] Rejected unverified webhook signature for event: ${eventId}`);
         return res.status(401).json({ received: false, message: "Invalid PayPal webhook signature" });
       }
     }
+
+    // 2. Idempotency Check using Webhook Event ID
+    let client = null;
+    try {
+      client = await mongoService.getClient();
+      if (client && eventId) {
+        const db = client.db();
+        const existingEvent = await db.collection("processed_webhooks").findOne({ eventId });
+        if (existingEvent) {
+          console.log(`[PayPal Webhook] Event ${eventId} was already processed at ${existingEvent.processedAt}`);
+          return res.status(200).json({ received: true, alreadyProcessed: true });
+        }
+      }
+    } catch (dbErr) {
+      // Continue processing if database is temporarily offline
+    }
+
+    let processedOrderNumber = null;
 
     if (eventType === "CHECKOUT.ORDER.APPROVED") {
       // Automatic capture if checkout order was approved on PayPal but client disconnect occurred
@@ -694,6 +722,7 @@ router.post("/payment/paypal/webhook", async (req, res) => {
       const paypalOrderId = resource?.id;
       const purchaseUnit = resource?.purchase_units?.[0];
       const orderNumber = purchaseUnit?.custom_id || purchaseUnit?.reference_id;
+      processedOrderNumber = orderNumber;
 
       if (paypalOrderId && orderNumber) {
         try {
@@ -719,6 +748,7 @@ router.post("/payment/paypal/webhook", async (req, res) => {
       const resource = event.resource;
       const orderNumber = resource?.custom_id || resource?.invoice_id;
       const captureId = resource?.id;
+      processedOrderNumber = orderNumber;
       if (orderNumber) {
         await orderService.markOrderAsPaid({
           orderNumber,
@@ -730,6 +760,7 @@ router.post("/payment/paypal/webhook", async (req, res) => {
     } else if (eventType === "PAYMENT.CAPTURE.PENDING") {
       const resource = event.resource;
       const orderNumber = resource?.custom_id || resource?.invoice_id;
+      processedOrderNumber = orderNumber;
       if (orderNumber) {
         await orderService.markOrderAsPendingReview(orderNumber, {
           paypalOrderId: resource?.supplementary_data?.related_ids?.order_id || null,
@@ -741,6 +772,7 @@ router.post("/payment/paypal/webhook", async (req, res) => {
     } else if (eventType === "PAYMENT.CAPTURE.DENIED" || eventType === "PAYMENT.CAPTURE.DECLINED") {
       const resource = event.resource;
       const orderNumber = resource?.custom_id || resource?.invoice_id;
+      processedOrderNumber = orderNumber;
       if (orderNumber) {
         await orderService.markOrderAsFailed(orderNumber, `PayPal Webhook: ${eventType}`);
       }
@@ -751,6 +783,7 @@ router.post("/payment/paypal/webhook", async (req, res) => {
       const amount = resource?.amount?.value;
       const currency = resource?.amount?.currency_code;
       const reason = resource?.status_details?.reason || "PayPal Webhook Refund";
+      processedOrderNumber = orderNumber;
 
       if (orderNumber) {
         await orderService.markOrderAsRefunded(orderNumber, {
@@ -766,6 +799,7 @@ router.post("/payment/paypal/webhook", async (req, res) => {
       const orderNumber = resource?.custom_id || resource?.invoice_id;
       const reversalId = resource?.id;
       const reason = resource?.status_details?.reason || "PayPal Webhook Reversal / Chargeback";
+      processedOrderNumber = orderNumber;
 
       if (orderNumber) {
         await orderService.markOrderAsReversed(orderNumber, {
@@ -773,6 +807,52 @@ router.post("/payment/paypal/webhook", async (req, res) => {
           reason,
           details: resource
         });
+      }
+    } else if (eventType === "CUSTOMER.DISPUTE.CREATED") {
+      const resource = event.resource;
+      const disputeId = resource?.dispute_id;
+      const disputeReason = resource?.reason || resource?.dispute_reason || "Customer dispute opened";
+      const disputeAmount = resource?.disputed_transactions?.[0]?.gross_amount?.value;
+      const orderNumber = resource?.disputed_transactions?.[0]?.custom_id || resource?.disputed_transactions?.[0]?.invoice_number;
+      processedOrderNumber = orderNumber;
+
+      if (orderNumber) {
+        await orderService.markOrderAsDisputed(orderNumber, {
+          disputeId,
+          reason: disputeReason,
+          amount: disputeAmount,
+          details: resource
+        });
+      }
+    } else if (eventType === "CUSTOMER.DISPUTE.RESOLVED") {
+      const resource = event.resource;
+      const disputeId = resource?.dispute_id;
+      const outcome = resource?.dispute_outcome?.outcome_code || "Dispute resolved";
+      const orderNumber = resource?.disputed_transactions?.[0]?.custom_id || resource?.disputed_transactions?.[0]?.invoice_number;
+      processedOrderNumber = orderNumber;
+
+      if (orderNumber) {
+        await orderService.markOrderDisputeResolved(orderNumber, {
+          disputeId,
+          outcome,
+          details: resource
+        });
+      }
+    }
+
+    // 3. Store processed webhook event for idempotency
+    if (client && eventId) {
+      try {
+        const db = client.db();
+        await db.collection("processed_webhooks").insertOne({
+          eventId,
+          eventType,
+          orderNumber: processedOrderNumber,
+          resourceId: event.resource?.id || null,
+          processedAt: new Date().toISOString()
+        });
+      } catch (insertErr) {
+        // Duplicate key or write collision ignored safely
       }
     }
 

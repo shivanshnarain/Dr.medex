@@ -605,6 +605,75 @@ async function markOrderAsReversed(orderNumber, { reversalId, reason, details } 
 }
 
 /**
+ * Mark order as DISPUTED via PayPal Webhook
+ */
+async function markOrderAsDisputed(orderNumber, { disputeId, reason, amount, details } = {}) {
+  if (!orderNumber) return null;
+  const now = new Date().toISOString();
+  try {
+    const client = await getClient();
+    const db = client.db();
+    await db.collection(ORDERS_COLLECTION).updateOne(
+      { orderNumber },
+      {
+        $set: {
+          "payment.disputeStatus": "UNDER_DISPUTE",
+          "payment.disputeId": disputeId || null,
+          "payment.disputeReason": reason || null,
+          "payment.disputeAmount": amount || null,
+          "payment.disputeDetails": details || null,
+          orderStatus: "DISPUTED",
+          status: "DISPUTED",
+          updatedAt: now
+        }
+      }
+    );
+  } catch (err) {}
+
+  const order = store.getOrderById(orderNumber);
+  if (order && order.payment) {
+    order.payment.disputeStatus = "UNDER_DISPUTE";
+    order.payment.disputeId = disputeId || null;
+    order.orderStatus = "DISPUTED";
+    order.status = "DISPUTED";
+    order.updatedAt = now;
+  }
+  return order || null;
+}
+
+/**
+ * Mark order dispute as RESOLVED via PayPal Webhook
+ */
+async function markOrderDisputeResolved(orderNumber, { disputeId, outcome, details } = {}) {
+  if (!orderNumber) return null;
+  const now = new Date().toISOString();
+  try {
+    const client = await getClient();
+    const db = client.db();
+    await db.collection(ORDERS_COLLECTION).updateOne(
+      { orderNumber },
+      {
+        $set: {
+          "payment.disputeStatus": "RESOLVED",
+          "payment.disputeOutcome": outcome || null,
+          "payment.disputeResolvedAt": now,
+          "payment.disputeDetails": details || null,
+          updatedAt: now
+        }
+      }
+    );
+  } catch (err) {}
+
+  const order = store.getOrderById(orderNumber);
+  if (order && order.payment) {
+    order.payment.disputeStatus = "RESOLVED";
+    order.payment.disputeOutcome = outcome || null;
+    order.updatedAt = now;
+  }
+  return order || null;
+}
+
+/**
  * Retrieve customer orders from MongoDB / store
  */
 async function getCustomerOrders(customerId, email) {
@@ -1012,6 +1081,8 @@ module.exports = {
   markOrderAsPendingReview,
   markOrderAsRefunded,
   markOrderAsReversed,
+  markOrderAsDisputed,
+  markOrderDisputeResolved,
   getCustomerOrders,
   getOrder,
   getCustomerAddresses,

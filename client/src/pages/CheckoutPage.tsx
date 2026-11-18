@@ -249,9 +249,12 @@ export const CheckoutPage: React.FC = () => {
   const buildOrderPayloadRef = useRef<any>(null);
   const isCapturingRef = useRef<boolean>(false);
 
-  // Synchronize payment gateway routing: Indian domestic customers -> Razorpay (INR); International -> PayPal
+  const PAYPAL_RESTRICTED_COUNTRIES = ["CU", "IR", "KP", "SY", "RU", "BY", "SD", "SS", "AF"];
+
+  // Synchronize payment gateway routing: Indian domestic customers & restricted regions -> Razorpay (INR); Eligible International -> PayPal
   useEffect(() => {
-    if (countryCode === "IN") {
+    const isRestricted = PAYPAL_RESTRICTED_COUNTRIES.includes((countryCode || "").toUpperCase());
+    if (countryCode === "IN" || isRestricted) {
       setSelectedPaymentMethod("RAZORPAY");
     } else {
       setSelectedPaymentMethod("PAYPAL");
@@ -1483,9 +1486,14 @@ export const CheckoutPage: React.FC = () => {
     fetchPaypalConfig();
   }, []);
 
-  // Dynamically load the official PayPal JavaScript SDK
+  // Dynamically load the official PayPal JavaScript SDK (only for eligible international destinations)
   useEffect(() => {
     if (!paypalClientId) return;
+    const isRestricted = PAYPAL_RESTRICTED_COUNTRIES.includes((countryCode || "").toUpperCase());
+    if (countryCode === "IN" || isRestricted) {
+      setIsPaypalSdkLoaded(false);
+      return;
+    }
 
     const scriptId = "paypal-sdk-script";
     const existingScript = document.getElementById(scriptId) as HTMLScriptElement;
@@ -1518,7 +1526,7 @@ export const CheckoutPage: React.FC = () => {
     };
 
     document.body.appendChild(script);
-  }, [paypalClientId, paypalCurrency]);
+  }, [paypalClientId, paypalCurrency, countryCode]);
 
   // Render Official PayPal Buttons in Step 3
   useEffect(() => {
@@ -2902,6 +2910,35 @@ export const CheckoutPage: React.FC = () => {
                       <p className="text-2xs text-neutral-600 mt-1 leading-relaxed">
                         Domestic Indian orders are processed in INR via UPI (Google Pay, PhonePe, Paytm), RuPay, Debit/Credit Cards, and Net Banking.
                       </p>
+                    </div>
+                  ) : PAYPAL_RESTRICTED_COUNTRIES.includes((countryCode || "").toUpperCase()) ? (
+                    <div className="space-y-3">
+                      <div className="p-3.5 rounded-xl border border-amber-300 bg-amber-50/80 text-xs text-amber-900 flex items-start gap-2.5">
+                        <AlertCircle size={18} className="shrink-0 text-amber-700 mt-0.5" />
+                        <div>
+                          <p className="font-bold text-amber-950">PayPal Gateway Notice</p>
+                          <p className="text-2xs text-amber-800 mt-0.5 leading-relaxed">
+                            PayPal payment services are restricted or unavailable for shipments to {activeCountry?.name || countryCode}. Please use International Credit / Debit Card below to complete your checkout.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="p-4.5 rounded-xl border-2 border-[#7AA05A] bg-[#F4F7F2]/60 ring-2 ring-[#7AA05A]/20">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <img src="/images/razorpay-mark.png" alt="Razorpay" className="h-6 w-auto object-contain" />
+                            <span className="font-extrabold text-sm text-[#0C2340]">International Credit / Debit Cards</span>
+                            <span className="text-[10px] font-bold bg-[#0C2340] text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              Razorpay Global
+                            </span>
+                          </div>
+                          <span className="w-4 h-4 rounded-full border-2 border-[#2D5A4A] bg-[#2D5A4A] flex items-center justify-center">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                          </span>
+                        </div>
+                        <p className="text-2xs text-neutral-600 mt-1 leading-relaxed">
+                          Secure international credit & debit cards (Visa, Mastercard, American Express) processed with 256-bit bank encryption.
+                        </p>
+                      </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
