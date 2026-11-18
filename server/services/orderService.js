@@ -394,15 +394,43 @@ async function markOrderAsPaid({ orderNumber, paypalOrderId, paypalCaptureId, pa
 }
 
 /**
- * Mark order as CANCELLED or FAILED
+ * Attach PayPal Order ID to a pending order immediately upon creation
  */
-async function markOrderAsFailed(orderNumber, reason = "Payment cancelled or failed") {
+async function attachPayPalOrderId(orderNumber, paypalOrderId) {
+  if (!orderNumber || !paypalOrderId) return;
   const now = new Date().toISOString();
   try {
     const client = await getClient();
     const db = client.db();
     await db.collection(ORDERS_COLLECTION).updateOne(
       { orderNumber },
+      {
+        $set: {
+          "payment.paypalOrderId": paypalOrderId,
+          updatedAt: now
+        }
+      }
+    );
+  } catch (err) {}
+
+  const order = store.getOrderById(orderNumber);
+  if (order && order.payment) {
+    order.payment.paypalOrderId = paypalOrderId;
+    order.updatedAt = now;
+  }
+}
+
+/**
+ * Mark order as FAILED (never overwrites an already-PAID order)
+ */
+async function markOrderAsFailed(orderNumber, reason = "Payment cancelled or failed") {
+  if (!orderNumber) return;
+  const now = new Date().toISOString();
+  try {
+    const client = await getClient();
+    const db = client.db();
+    await db.collection(ORDERS_COLLECTION).updateOne(
+      { orderNumber, "payment.status": { $ne: "PAID" } },
       {
         $set: {
           "payment.status": "FAILED",
@@ -416,12 +444,85 @@ async function markOrderAsFailed(orderNumber, reason = "Payment cancelled or fai
   } catch (err) {}
 
   const order = store.getOrderById(orderNumber);
-  if (order && order.payment.status !== "PAID") {
+  if (order && order.payment && order.payment.status !== "PAID") {
     order.payment.status = "FAILED";
     order.payment.failureReason = reason;
     order.orderStatus = "CANCELLED";
     order.status = "CANCELLED";
+    order.updatedAt = now;
   }
+}
+
+/**
+ * Mark unpaid order as CANCELLED when buyer cancels checkout on PayPal
+ */
+async function markOrderAsCancelled(orderNumber, reason = "Payment cancelled by customer") {
+  if (!orderNumber) return null;
+  const now = new Date().toISOString();
+  try {
+    const client = await getClient();
+    const db = client.db();
+    await db.collection(ORDERS_COLLECTION).updateOne(
+      { orderNumber, "payment.status": { $ne: "PAID" } },
+      {
+        $set: {
+          "payment.status": "CANCELLED",
+          "payment.failureReason": reason,
+          orderStatus: "CANCELLED",
+          status: "CANCELLED",
+          updatedAt: now
+        }
+      }
+    );
+  } catch (err) {}
+
+  const order = store.getOrderById(orderNumber);
+  if (order && order.payment && order.payment.status !== "PAID") {
+    order.payment.status = "CANCELLED";
+    order.payment.failureReason = reason;
+    order.orderStatus = "CANCELLED";
+    order.status = "CANCELLED";
+    order.updatedAt = now;
+  }
+  return order || null;
+}
+
+/**
+ * Mark order as PENDING verification (e.g., PayPal capture returned PENDING eCheck/review)
+ * Does NOT mark the order as PAID or CANCELLED.
+ */
+async function markOrderAsPendingReview(orderNumber, { paypalOrderId, paypalCaptureId, reason, paymentDetails } = {}) {
+  if (!orderNumber) return null;
+  const now = new Date().toISOString();
+  const pendingReason = reason || "PayPal payment pending settlement";
+  try {
+    const client = await getClient();
+    const db = client.db();
+    await db.collection(ORDERS_COLLECTION).updateOne(
+      { orderNumber, "payment.status": { $ne: "PAID" } },
+      {
+        $set: {
+          "payment.status": "PENDING",
+          "payment.paypalOrderId": paypalOrderId || null,
+          "payment.paypalCaptureId": paypalCaptureId || null,
+          "payment.pendingReason": pendingReason,
+          "payment.details": paymentDetails || null,
+          updatedAt: now
+        }
+      }
+    );
+  } catch (err) {}
+
+  const order = store.getOrderById(orderNumber);
+  if (order && order.payment && order.payment.status !== "PAID") {
+    order.payment.status = "PENDING";
+    if (paypalOrderId) order.payment.paypalOrderId = paypalOrderId;
+    if (paypalCaptureId) order.payment.paypalCaptureId = paypalCaptureId;
+    order.payment.pendingReason = pendingReason;
+    order.payment.details = paymentDetails || order.payment.details;
+    order.updatedAt = now;
+  }
+  return order || null;
 }
 
 /**
@@ -825,8 +926,11 @@ async function resendInvoiceEmail(orderNumber) {
 module.exports = {
   validateAndCalculateOrder,
   createPendingOrder,
+  attachPayPalOrderId,
   markOrderAsPaid,
   markOrderAsFailed,
+  markOrderAsCancelled,
+  markOrderAsPendingReview,
   getCustomerOrders,
   getOrder,
   getCustomerAddresses,

@@ -1301,9 +1301,10 @@ export const CheckoutPage: React.FC = () => {
       });
 
       const data = await res.json();
+      const checkoutBase = data.mode === "live" ? "https://www.paypal.com" : "https://www.sandbox.paypal.com";
       const approvalUrl =
         data.approvalUrl ||
-        (data.orderID ? `https://www.sandbox.paypal.com/checkoutnow?token=${data.orderID}` : null);
+        (data.orderID ? `${checkoutBase}/checkoutnow?token=${data.orderID}` : null);
 
       if (!res.ok || !data.success || !approvalUrl) {
         throw new Error(data.message || "Failed to initiate PayPal checkout. Please try again or select another payment method.");
@@ -1368,18 +1369,34 @@ export const CheckoutPage: React.FC = () => {
           });
       }
     } else if (params.get("paypal_cancel") === "1") {
+      const cancelOrderNum = params.get("orderNumber") || sessionStorage.getItem("drmedex_paypal_pending_order");
+      const cancelToken = params.get("token") || sessionStorage.getItem("drmedex_paypal_order_id");
+      if (cancelOrderNum || cancelToken) {
+        fetch("/api/payment/paypal/cancel-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderNumber: cancelOrderNum, orderID: cancelToken })
+        }).catch(() => {});
+      }
       setErrorMessage("PayPal checkout was cancelled. You can review your order or select another payment method.");
       setCurrentStep(3);
     }
   }, [location.search]);
 
-  // Fetch PayPal Client ID
+  // Fetch PayPal Client ID (Public only — server enforces environment safety)
   useEffect(() => {
     async function fetchPaypalConfig() {
       try {
         const res = await fetch("/api/payment/paypal/config");
         if (res.ok) {
           const data = await res.json();
+          if (data.configured === false) {
+            setPaypalSdkLoadError(
+              data.warning ||
+                "PayPal Gateway is not currently configured for this environment. Please contact support."
+            );
+            return;
+          }
           if (data.clientId) {
             setPaypalClientId(data.clientId);
             return;
@@ -1542,6 +1559,14 @@ export const CheckoutPage: React.FC = () => {
         },
 
         onCancel: () => {
+          const pendingNum = sessionStorage.getItem("drmedex_pending_order_number");
+          if (pendingNum) {
+            fetch("/api/payment/paypal/cancel-order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orderNumber: pendingNum })
+            }).catch(() => {});
+          }
           setIsProcessing(false);
           setErrorMessage("PayPal checkout was cancelled. Your details and cart remain safely saved.");
         },

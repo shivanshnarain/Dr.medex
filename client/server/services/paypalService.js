@@ -5,37 +5,133 @@
 
 /**
  * Dynamic credential getters to guarantee real-time resolution in serverless / Vercel environments
+ * SECURITY: Client Secret is strictly server-side and must NEVER be read from VITE_* variables
+ * or exposed in API responses, logs, or frontend bundles.
  */
+function stripQuotes(val) {
+  return String(val || "").trim().replace(/^["']|["']$/g, "").trim();
+}
+
 function getClientId() {
-  return (
+  return stripQuotes(
     process.env.PAYPAL_CLIENT_ID ||
-    process.env.VITE_PAYPAL_CLIENT_ID ||
     process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ||
     process.env.REACT_APP_PAYPAL_CLIENT_ID ||
     process.env.PAYPAL_CLIENT ||
     ""
-  ).trim().replace(/^["']|["']$/g, "");
+  );
 }
 
 function getClientSecret() {
-  return (
+  return stripQuotes(
     process.env.PAYPAL_CLIENT_SECRET ||
     process.env.PAYPAL_SECRET_KEY ||
     process.env["paypal-secret_key"] ||
-    process.env["PAYPAL_SECRET_KEY"] ||
     process.env.PAYPAL_SECRET ||
     ""
-  ).trim().replace(/^["']|["']$/g, "");
+  );
 }
 
 function getMode() {
-  return (process.env.PAYPAL_MODE || "sandbox").trim().toLowerCase();
+  const raw = stripQuotes(process.env.PAYPAL_MODE || "sandbox").toLowerCase();
+  return raw || "sandbox";
+}
+
+function getDeploymentEnv() {
+  if (process.env.VERCEL_ENV) {
+    return stripQuotes(process.env.VERCEL_ENV).toLowerCase();
+  }
+  if (process.env.NODE_ENV) {
+    return stripQuotes(process.env.NODE_ENV).toLowerCase();
+  }
+  return "development";
+}
+
+/**
+ * Validate PayPal mode & deployment environment safety.
+ * - Never silently use Sandbox credentials in Production (VERCEL_ENV === "production").
+ * - Never silently use Live credentials in Development or Preview environments.
+ */
+function checkEnvironmentSafety() {
+  const mode = getMode();
+  const env = getDeploymentEnv();
+
+  if (mode !== "sandbox" && mode !== "live") {
+    return {
+      safe: false,
+      code: "INVALID_PAYPAL_MODE",
+      reason: `Invalid PAYPAL_MODE "${mode}". Expected "sandbox" or "live".`
+    };
+  }
+
+  if (env === "production" && mode !== "live") {
+    return {
+      safe: false,
+      code: "SANDBOX_BLOCKED_IN_PRODUCTION",
+      reason:
+        "PayPal Live credentials are not configured for Production. Refusing to silently run Sandbox mode in Production."
+    };
+  }
+
+  if (
+    (env === "development" || env === "preview") &&
+    mode === "live" &&
+    process.env.PAYPAL_ALLOW_LIVE_IN_NON_PROD !== "true"
+  ) {
+    return {
+      safe: false,
+      code: "LIVE_BLOCKED_IN_NON_PRODUCTION",
+      reason:
+        `Refusing to silently use PayPal Live mode in "${env}" environment. Configure Sandbox credentials and PAYPAL_MODE=sandbox.`
+    };
+  }
+
+  return { safe: true, code: "OK", reason: null };
+}
+
+function assertEnvironmentSafety() {
+  const check = checkEnvironmentSafety();
+  if (!check.safe) {
+    const err = new Error(check.reason);
+    err.code = check.code;
+    throw err;
+  }
 }
 
 function getBaseUrl() {
-  return getMode() === "live"
+  const mode = getMode();
+  if (mode !== "sandbox" && mode !== "live") {
+    throw new Error(`Invalid PAYPAL_MODE "${mode}". Expected "sandbox" or "live".`);
+  }
+  return mode === "live"
     ? "https://api-m.paypal.com"
     : "https://api-m.sandbox.paypal.com";
+}
+
+function getCheckoutBaseUrl() {
+  return getMode() === "live"
+    ? "https://www.paypal.com"
+    : "https://www.sandbox.paypal.com";
+}
+
+/**
+ * Returns strictly non-sensitive PayPal configuration safe for browser consumption.
+ * NEVER includes clientSecret or any server credential.
+ */
+function getPublicConfig() {
+  const clientId = getClientId();
+  const hasSecret = Boolean(getClientSecret());
+  const mode = getMode();
+  const safety = checkEnvironmentSafety();
+  const configured = Boolean(clientId && hasSecret && safety.safe);
+
+  return {
+    clientId: configured ? clientId : "",
+    mode,
+    configured,
+    environment: getDeploymentEnv(),
+    ...(safety.safe ? {} : { warning: safety.reason })
+  };
 }
 
 // In-memory token cache to minimize OAuth round-trips
@@ -43,10 +139,18 @@ let cachedToken = null;
 let tokenExpiresAt = 0;
 let cachedCredentialsHash = "";
 
+function clearTokenCache() {
+  cachedToken = null;
+  tokenExpiresAt = 0;
+  cachedCredentialsHash = "";
+}
+
 /**
  * Obtain or refresh OAuth 2.0 access token from PayPal
  */
 async function getAccessToken() {
+  assertEnvironmentSafety();
+
   const currentClientId = getClientId();
   const currentClientSecret = getClientSecret();
   const currentMode = getMode();
@@ -72,11 +176,20 @@ async function getAccessToken() {
   });
 
   if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`PayPal OAuth authentication failed (HTTP ${res.status}): ${errorText}`);
+    let errorDesc = `HTTP ${res.status}`;
+    try {
+      const errJson = await res.json();
+      errorDesc = errJson.error_description || errJson.error || errorDesc;
+    } catch {
+      // Never include raw credentials in error text
+    }
+    throw new Error(`PayPal OAuth authentication failed (HTTP ${res.status}): ${errorDesc}`);
   }
 
   const data = await res.json();
+  if (!data || !data.access_token) {
+    throw new Error("PayPal OAuth response did not include an access_token.");
+  }
   cachedToken = data.access_token;
   cachedCredentialsHash = credsHash;
   tokenExpiresAt = Date.now() + (data.expires_in || 3600) * 1000;
@@ -106,13 +219,24 @@ async function createOrder({
   currency = "USD",
   description = "DR.MEDEX Medical Equipment",
   items = [],
-  customer = {}
+  customer = {},
+  returnUrl,
+  cancelUrl
 }) {
   const token = await getAccessToken();
   const baseUrl = getBaseUrl();
 
-  const numAmount = Number(amount) || 0;
-  const formattedAmount = currency === "JPY"
+  // Normalize currency to a verified PayPal-supported ISO code (default USD)
+  const cleanCurrency = isPayPalSupportedCurrency(currency)
+    ? currency.toUpperCase()
+    : "USD";
+
+  const isZeroDecimal = cleanCurrency === "JPY" || cleanCurrency === "HUF" || cleanCurrency === "TWD";
+  const numAmount = Number(amount);
+  if (!Number.isFinite(numAmount) || numAmount <= 0) {
+    throw new Error(`Invalid PayPal order amount: ${amount}`);
+  }
+  const formattedAmount = isZeroDecimal
     ? Math.round(numAmount).toString()
     : numAmount.toFixed(2);
 
@@ -123,7 +247,7 @@ async function createOrder({
     description: `DR.MEDEX Order #${orderNumber}`.substring(0, 127),
     custom_id: String(orderNumber || ""),
     amount: {
-      currency_code: currency,
+      currency_code: cleanCurrency,
       value: formattedAmount
     }
   };
@@ -131,14 +255,14 @@ async function createOrder({
   // If items are provided, build item line details safely
   if (Array.isArray(items) && items.length > 0) {
     const paypalItems = items.slice(0, 10).map((it) => {
-      const itemPrice = currency === "JPY"
+      const itemPrice = isZeroDecimal
         ? Math.round(Number(it.unitPrice) || 0).toString()
         : Number(it.unitPrice || 0).toFixed(2);
       return {
         name: (it.title || "Medical Device").substring(0, 127),
         sku: (it.sku || it.productId || "MED-SKU").substring(0, 127),
         unit_amount: {
-          currency_code: currency,
+          currency_code: cleanCurrency,
           value: itemPrice
         },
         quantity: String(it.quantity || 1),
@@ -150,17 +274,20 @@ async function createOrder({
       return acc + (Number(it.unit_amount.value) * Number(it.quantity));
     }, 0);
 
-    const formattedItemTotal = currency === "JPY"
+    const formattedItemTotal = isZeroDecimal
       ? Math.round(itemTotal).toString()
       : itemTotal.toFixed(2);
 
-    // Only attach breakdown if item total matches overall amount (no discounts/shipping rounding divergence)
-    if (Math.abs(Number(formattedItemTotal) - Number(formattedAmount)) < 0.05) {
+    // CRITICAL: PayPal strictly enforces that sum(items.unit_amount * quantity) === breakdown.item_total.value
+    // and that item_total + shipping - discount === amount.value.
+    // If there is ANY cent mismatch (e.g. from exchange rate rounding or discounts), breakdown triggers HTTP 422 ITEM_TOTAL_MISMATCH.
+    // Therefore, only include breakdown and items if itemTotal matches formattedAmount EXACTLY to the penny.
+    if (formattedItemTotal === formattedAmount) {
       purchaseUnit.items = paypalItems;
       purchaseUnit.amount.breakdown = {
         item_total: {
-          currency_code: currency,
-          value: formattedAmount
+          currency_code: cleanCurrency,
+          value: formattedItemTotal
         }
       };
     }
@@ -173,7 +300,9 @@ async function createOrder({
       brand_name: "DR.MEDEX Medical Equipment",
       landing_page: "NO_PREFERENCE",
       user_action: "PAY_NOW",
-      shipping_preference: "NO_SHIPPING"
+      shipping_preference: "NO_SHIPPING",
+      ...(returnUrl ? { return_url: returnUrl } : {}),
+      ...(cancelUrl ? { cancel_url: cancelUrl } : {})
     }
   };
 
@@ -189,7 +318,10 @@ async function createOrder({
 
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(`PayPal Order Creation Failed (HTTP ${res.status}): ${data.message || JSON.stringify(data)}`);
+    const detailMsg = Array.isArray(data.details)
+      ? data.details.map((d) => `${d.issue || d.name || "Error"}: ${d.description || ""}${d.field ? ` (${d.field})` : ""}`).join("; ")
+      : data.message || JSON.stringify(data);
+    throw new Error(`PayPal Order Creation Failed (HTTP ${res.status}): ${detailMsg}`);
   }
 
   return data;
@@ -199,10 +331,15 @@ async function createOrder({
  * Capture an approved PayPal order with idempotency
  */
 async function captureOrder(paypalOrderId) {
+  const cleanOrderId = String(paypalOrderId || "").trim();
+  if (!cleanOrderId) {
+    throw new Error("PayPal orderID is required for capture.");
+  }
+
   const token = await getAccessToken();
   const baseUrl = getBaseUrl();
 
-  const res = await fetch(`${baseUrl}/v2/checkout/orders/${paypalOrderId}/capture`, {
+  const res = await fetch(`${baseUrl}/v2/checkout/orders/${encodeURIComponent(cleanOrderId)}/capture`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${token}`,
@@ -213,21 +350,28 @@ async function captureOrder(paypalOrderId) {
 
   const data = await res.json();
   if (!res.ok) {
-    // If order was already captured (HTTP 422 with ORDER_ALREADY_CAPTURED), retrieve details
+    // If order was already captured (HTTP 422 with ORDER_ALREADY_CAPTURED), retrieve verified details
     if (
-      res.status === 422 ||
-      (Array.isArray(data.details) && data.details.some((d) => d.issue === "ORDER_ALREADY_CAPTURED"))
+      res.status === 422 &&
+      Array.isArray(data.details) &&
+      data.details.some((d) => d.issue === "ORDER_ALREADY_CAPTURED")
     ) {
       try {
-        const existingDetails = await getOrderDetails(paypalOrderId);
-        if (existingDetails && (existingDetails.status === "COMPLETED" || existingDetails.status === "APPROVED")) {
+        const existingDetails = await getOrderDetails(cleanOrderId);
+        if (existingDetails && existingDetails.status === "COMPLETED") {
           return existingDetails;
         }
       } catch (checkErr) {
         // Fall through to throw original error
       }
     }
-    throw new Error(`PayPal Order Capture Failed (HTTP ${res.status}): ${data.message || JSON.stringify(data)}`);
+    const detailMsg = Array.isArray(data.details)
+      ? data.details.map((d) => `${d.issue || d.name || "Error"}: ${d.description || ""}`).join("; ")
+      : data.message || `HTTP ${res.status}`;
+    const err = new Error(`PayPal Order Capture Failed (HTTP ${res.status}): ${detailMsg}`);
+    err.httpStatus = res.status;
+    err.paypalIssue = Array.isArray(data.details) ? data.details[0]?.issue : data.name;
+    throw err;
   }
 
   return data;
@@ -237,10 +381,14 @@ async function captureOrder(paypalOrderId) {
  * Retrieve details for an existing PayPal order
  */
 async function getOrderDetails(paypalOrderId) {
+  const cleanOrderId = String(paypalOrderId || "").trim();
+  if (!cleanOrderId) {
+    throw new Error("PayPal orderID is required.");
+  }
   const token = await getAccessToken();
   const baseUrl = getBaseUrl();
 
-  const res = await fetch(`${baseUrl}/v2/checkout/orders/${paypalOrderId}`, {
+  const res = await fetch(`${baseUrl}/v2/checkout/orders/${encodeURIComponent(cleanOrderId)}`, {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${token}`,
@@ -294,6 +442,8 @@ async function verifyWebhookSignature({
 
 module.exports = {
   isPayPalSupportedCurrency,
+  getAccessToken,
+  clearTokenCache,
   createOrder,
   captureOrder,
   getOrderDetails,
@@ -301,5 +451,10 @@ module.exports = {
   getClientId,
   getClientSecret,
   getMode,
-  getBaseUrl
+  getDeploymentEnv,
+  checkEnvironmentSafety,
+  assertEnvironmentSafety,
+  getBaseUrl,
+  getCheckoutBaseUrl,
+  getPublicConfig
 };
