@@ -118,9 +118,24 @@ export const ShopPage: React.FC = () => {
       const activeCat = categories.find(
         (c) => c.slug === selectedCategory || c.id === selectedCategory
       );
-      const catId = activeCat ? activeCat.id : selectedCategory;
-      const catSlug = activeCat ? activeCat.slug : selectedCategory;
-      list = list.filter((p) => p.category === catId || p.category === catSlug);
+      if (activeCat) {
+        list = list.filter((p) => p.category === activeCat.id || p.category === activeCat.slug);
+      } else {
+        // Check if selectedCategory is a subcategory slug/id
+        const parentWithSub = categories.find((c) =>
+          (c.subcategories || []).some((s) => s.slug === selectedCategory || s.id === selectedCategory)
+        );
+        if (parentWithSub) {
+          list = list.filter(
+            (p) =>
+              p.subcategory === selectedCategory ||
+              p.subcategory === selectedCategory.replace(/-/g, " ") ||
+              (Array.isArray(p.subcategories) && p.subcategories.includes(selectedCategory))
+          );
+        } else {
+          list = list.filter((p) => p.category === selectedCategory);
+        }
+      }
     }
 
     if (selectedSubcategory) {

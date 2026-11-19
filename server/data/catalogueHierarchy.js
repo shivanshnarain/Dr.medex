@@ -335,6 +335,14 @@ const catalogueHierarchy = {
           { id: "muscle-stimulator-nmse", name: "Digital Neuromuscular Stimulation Unit", defaultCode: "NMS" },
           { id: "russian-current-stimulator", name: "Clinical Russian Current Muscle Stimulator", defaultCode: "RMS" }
         ]
+      },
+      {
+        id: "ift",
+        name: "Interferential Therapy (IFT)",
+        equipmentTypes: [
+          { id: "ift-vacuum-therapy", name: "I.F.T. Vacuum Therapy Machine", defaultCode: "IVT" },
+          { id: "ift-interferential-unit", name: "Clinical Interferential Electrotherapy Unit", defaultCode: "IEU" }
+        ]
       }
     ]
   }

@@ -441,7 +441,13 @@ module.exports = {
       }
     }
     if (filters.category && filters.category !== "ALL") {
-      list = list.filter(p => p.category === filters.category);
+      const cleanCat = filters.category;
+      const isSub = state.categories.some(c => (c.subcategories || []).some(s => s.id === cleanCat || s.slug === cleanCat));
+      if (isSub) {
+        list = list.filter(p => p.subcategory === cleanCat || (Array.isArray(p.subcategories) && p.subcategories.includes(cleanCat)));
+      } else {
+        list = list.filter(p => p.category === cleanCat);
+      }
     }
     if (filters.subcategory && filters.subcategory !== "ALL") {
       list = list.filter(p => p.subcategory === filters.subcategory || (Array.isArray(p.subcategories) && p.subcategories.includes(filters.subcategory)));

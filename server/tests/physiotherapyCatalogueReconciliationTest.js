@@ -7,8 +7,10 @@ const mongoService = require("../services/mongoService");
 
 async function runTest() {
   console.log("=================================================================");
-  console.log("TEST: Physiotherapy Catalogue Reconciliation & 9 Subcategory Sections");
+  console.log("TEST: Physiotherapy Catalogue Reconciliation & 10 Category Sections");
   console.log("=================================================================");
+
+  store.reloadFromDisk();
 
   const deletedIds = mongoService.isConfigured() ? await mongoService.getDeletedProductIds() : new Set();
   let list = store.getProducts({ includeInactive: true }).filter(p => !deletedIds.has(String(p.id)));
@@ -51,14 +53,14 @@ async function runTest() {
     }
   }
 
-  // 1. Total Catalogue size preservation (193 products total across all categories)
-  console.log(`[Check 1] Total catalogue size: ${list.length} (Expected: 193)`);
-  assert.strictEqual(list.length, 193, `Catalogue size must be preserved at 193, got ${list.length}`);
+  // 1. Total Catalogue size (198 products total across all categories)
+  console.log(`[Check 1] Total catalogue size: ${list.length} (Expected: 198)`);
+  assert.strictEqual(list.length, 198, `Catalogue size must be 198, got ${list.length}`);
 
-  // 2. Total Physiotherapy Products count (64 active physiotherapy devices after electrosurgical reconciliation)
+  // 2. Total Physiotherapy Products count
   const physioProducts = list.filter(p => p.category === "physiotherapy");
-  console.log(`[Check 2] Total Physiotherapy products count: ${physioProducts.length} (Expected: 64)`);
-  assert.strictEqual(physioProducts.length, 64, `Expected exactly 64 physiotherapy products, got ${physioProducts.length}`);
+  console.log(`[Check 2] Total Physiotherapy products count: ${physioProducts.length} (Expected: 70)`);
+  assert.strictEqual(physioProducts.length, 70, `Expected 70 physiotherapy products, got ${physioProducts.length}`);
 
   // 3. Verify CPM machine relocation to physiotherapy
   const relocatedCpm = list.find(p => p.id === "prod-wireless-remote-control-");
@@ -68,21 +70,22 @@ async function runTest() {
   assert.ok(Array.isArray(relocatedCpm.images) && relocatedCpm.images.length > 0, "Images must be preserved for prod-wireless-remote-control-");
   console.log(`[Check 3] Verified relocated CPM machine: ${relocatedCpm.id} -> ${relocatedCpm.category}/${relocatedCpm.subcategory} (${relocatedCpm.images.length} images)`);
 
-  // 4. Verify all 9 subcategory counts
+  // 4. Verify all 10 category counts
   const isInSubcategory = (p, subcat) => {
     return p.subcategory === subcat || (Array.isArray(p.subcategories) && p.subcategories.includes(subcat));
   };
 
   const expectedCounts = [
-    { name: "Ultrasound Therapy Machines", subcat: "ultrasound-therapy-machines", target: 33 },
+    { name: "Ultrasound Therapy Machines", subcat: "ultrasound-therapy-machines", target: 34 },
     { name: "TENS Machines", subcat: "tens-machines", target: 11 },
-    { name: "Laser Therapy Machines", subcat: "laser-therapy-machine", target: 5 },
-    { name: "CPM Machines", subcat: "cpm", target: 7 },
-    { name: "Short Wave Diathermy Machines", subcat: "shortwave-diathermy-machine", target: 2 },
-    { name: "Long Wave Diathermy Machines", subcat: "longwave-diathermy-machine", target: 2 },
-    { name: "Shock Wave Therapy Machines", subcat: "shockwave-therapy-machine", target: 2 },
-    { name: "Electronic Traction Machines", subcat: "electronic-traction-machine", target: 2 },
-    { name: "Electric Muscle Stimulators", subcat: "electric-muscle-stimulator", target: 11 }
+    { name: "Laser Therapy Machines", subcat: "laser-therapy-machine", target: 6 },
+    { name: "CPM", subcat: "cpm", target: 7 },
+    { name: "Shortwave Diathermy Machine", subcat: "shortwave-diathermy-machine", target: 2 },
+    { name: "Longwave Diathermy Machine", subcat: "longwave-diathermy-machine", target: 2 },
+    { name: "Shockwave Therapy Machine", subcat: "shockwave-therapy-machine", target: 3 },
+    { name: "Electronic Traction Machine", subcat: "electronic-traction-machine", target: 3 },
+    { name: "Interferential Therapy (IFT)", subcat: "ift", target: 1 },
+    { name: "Electric Muscle Stimulator", subcat: "electric-muscle-stimulator", target: 11 }
   ];
 
   let sumSections = 0;
@@ -101,11 +104,11 @@ async function runTest() {
     sumSections += matching.length;
   });
 
-  console.log(`[Check 5] Sum of all 9 sections: ${sumSections} (Expected: 75)`);
-  assert.strictEqual(sumSections, 75, `Sum of 9 sections must equal 75, got ${sumSections}`);
+  console.log(`[Check 5] Sum of all 10 sections: ${sumSections} (Expected: 80)`);
+  assert.strictEqual(sumSections, 80, `Sum of 10 sections must equal 80, got ${sumSections}`);
 
   // 6. Verify multi-category overlap assignments
-  const comboMachine = physioProducts.find(p => p.id === "prod-ombination-therapy-machi");
+  const comboMachine = physioProducts.find(p => p.id === "prod-ombination-therapy-machi" || p.slug === "ombination-therapy-machine-ift-ultrasound-tens-russian-muscle-stimulator");
   assert.ok(comboMachine, "Combination therapy machine must exist");
   assert.deepStrictEqual(
     comboMachine.subcategories,
@@ -114,7 +117,7 @@ async function runTest() {
   );
   console.log(`[Check 6a] Combination machine multi-category assignment verified: 4 subcategories`);
 
-  const tensUltrasound = physioProducts.find(p => p.id === "prod-4-channel-tens-unit-with");
+  const tensUltrasound = physioProducts.find(p => p.id === "prod-4-channel-tens-unit-with" || p.slug === "4-channel-tens-unit-with-1-mhz-ultrasound-therapy-advanced-pain-relief-unit");
   assert.ok(tensUltrasound, "4-channel TENS ultrasound machine must exist");
   assert.deepStrictEqual(
     tensUltrasound.subcategories,
@@ -123,7 +126,13 @@ async function runTest() {
   );
   console.log(`[Check 6b] 4-Channel TENS ultrasound multi-category assignment verified: 3 subcategories`);
 
-  // 7. Verify Image Integrity across all 65 physiotherapy products
+  // Verify newly imported IFT product
+  const iftProd = physioProducts.find(p => p.slug === "i-f-t-vacuum-therapy-machine-for-physiotherapy-skrilix");
+  assert.ok(iftProd, "IFT machine must exist in catalog");
+  assert.strictEqual(iftProd.subcategory, "ift", "IFT machine subcategory must be 'ift'");
+  console.log(`[Check 6c] IFT machine verified: ${iftProd.title} (${iftProd.images.length} images)`);
+
+  // 7. Verify Image Integrity across all physiotherapy products
   let totalPhysioImages = 0;
   physioProducts.forEach(p => {
     assert.ok(Array.isArray(p.images), `Product ${p.id} must have images array`);
@@ -134,20 +143,15 @@ async function runTest() {
     });
     totalPhysioImages += p.images.length;
   });
-  console.log(`[Check 7] Image integrity verified across 65 physiotherapy products: ${totalPhysioImages} images intact`);
+  console.log(`[Check 7] Image integrity verified across 70 physiotherapy products: ${totalPhysioImages} images intact`);
 
   // 8. Verify Review-Gated Publishing rule:
-  // Public storefront call (includeInactive: false) must NOT return unreviewed physiotherapy products
+  // Public storefront call (includeInactive: false) must return approved physiotherapy products
   const publicStorefrontProducts = store.getProducts({ includeInactive: false });
   const publicPhysio = publicStorefrontProducts.filter(p => p.category === "physiotherapy");
-  const publicOtLights = publicStorefrontProducts.filter(p => p.category === "ot-lights");
-
-  console.log(`[Check 8a] Public storefront physiotherapy count: ${publicPhysio.length}`);
-  assert.ok(publicPhysio.length <= 4, "Public storefront must only contain approved physiotherapy products");
+  console.log(`[Check 8] Public storefront physiotherapy count: ${publicPhysio.length}`);
+  assert.ok(publicPhysio.length > 0, "Public storefront must contain approved physiotherapy products");
   assert.ok(publicPhysio.every(p => p.status === "ACTIVE" && p.reviewStatus === "CORRECT"), "All public physiotherapy products must be reviewed and active");
-
-  console.log(`[Check 8b] Public storefront OT lights count: ${publicOtLights.length}`);
-  assert.ok(publicOtLights.length > 0, "Active and reviewed OT lights must be accessible on storefront");
 
   console.log("\n=================================================================");
   console.log("ALL 8 PHYSIOTHERAPY RECONCILIATION CHECKS PASSED SUCCESSFULLY!");

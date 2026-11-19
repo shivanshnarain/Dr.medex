@@ -53,7 +53,12 @@
       {
         "id": "electric-muscle-stimulator",
         "slug": "electric-muscle-stimulator",
-        "name": "Electric Muscle Stimulators"
+        "name": "Electric Muscle Stimulator"
+      },
+      {
+        "id": "ift",
+        "slug": "ift",
+        "name": "Interferential Therapy (IFT)"
       }
     ]
   },
