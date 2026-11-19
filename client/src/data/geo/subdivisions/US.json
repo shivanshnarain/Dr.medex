@@ -2,331 +2,337 @@
   {
     "code": "AL",
     "name": "Alabama",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "AK",
     "name": "Alaska",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "AS",
     "name": "American Samoa",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "Territory"
   },
   {
     "code": "AZ",
     "name": "Arizona",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "AR",
     "name": "Arkansas",
-    "countryCode": "US"
-  },
-  {
-    "code": "UM-81",
-    "name": "Baker Island",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "CA",
     "name": "California",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "CO",
     "name": "Colorado",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "CT",
     "name": "Connecticut",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "DE",
     "name": "Delaware",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "DC",
     "name": "District of Columbia",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "Federal District"
   },
   {
     "code": "FL",
     "name": "Florida",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "GA",
     "name": "Georgia",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "GU",
     "name": "Guam",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "Territory"
   },
   {
     "code": "HI",
     "name": "Hawaii",
-    "countryCode": "US"
-  },
-  {
-    "code": "UM-84",
-    "name": "Howland Island",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "ID",
     "name": "Idaho",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "IL",
     "name": "Illinois",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "IN",
     "name": "Indiana",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "IA",
     "name": "Iowa",
-    "countryCode": "US"
-  },
-  {
-    "code": "UM-86",
-    "name": "Jarvis Island",
-    "countryCode": "US"
-  },
-  {
-    "code": "UM-67",
-    "name": "Johnston Atoll",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "KS",
     "name": "Kansas",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "KY",
     "name": "Kentucky",
-    "countryCode": "US"
-  },
-  {
-    "code": "UM-89",
-    "name": "Kingman Reef",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "LA",
     "name": "Louisiana",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "ME",
     "name": "Maine",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "MD",
     "name": "Maryland",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "MA",
     "name": "Massachusetts",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "MI",
     "name": "Michigan",
-    "countryCode": "US"
-  },
-  {
-    "code": "UM-71",
-    "name": "Midway Atoll",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "MN",
     "name": "Minnesota",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "MS",
     "name": "Mississippi",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "MO",
     "name": "Missouri",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "MT",
     "name": "Montana",
-    "countryCode": "US"
-  },
-  {
-    "code": "UM-76",
-    "name": "Navassa Island",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "NE",
     "name": "Nebraska",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "NV",
     "name": "Nevada",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "NH",
     "name": "New Hampshire",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "NJ",
     "name": "New Jersey",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "NM",
     "name": "New Mexico",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "NY",
     "name": "New York",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "NC",
     "name": "North Carolina",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "ND",
     "name": "North Dakota",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "MP",
     "name": "Northern Mariana Islands",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "Territory"
   },
   {
     "code": "OH",
     "name": "Ohio",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "OK",
     "name": "Oklahoma",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "OR",
     "name": "Oregon",
-    "countryCode": "US"
-  },
-  {
-    "code": "UM-95",
-    "name": "Palmyra Atoll",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "PA",
     "name": "Pennsylvania",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "PR",
     "name": "Puerto Rico",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "Territory"
   },
   {
     "code": "RI",
     "name": "Rhode Island",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "SC",
     "name": "South Carolina",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "SD",
     "name": "South Dakota",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "TN",
     "name": "Tennessee",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "TX",
     "name": "Texas",
-    "countryCode": "US"
-  },
-  {
-    "code": "UM",
-    "name": "United States Minor Outlying Islands",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "VI",
     "name": "United States Virgin Islands",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "Territory"
   },
   {
     "code": "UT",
     "name": "Utah",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "VT",
     "name": "Vermont",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "VA",
     "name": "Virginia",
-    "countryCode": "US"
-  },
-  {
-    "code": "UM-79",
-    "name": "Wake Island",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "WA",
     "name": "Washington",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "WV",
     "name": "West Virginia",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "WI",
     "name": "Wisconsin",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   },
   {
     "code": "WY",
     "name": "Wyoming",
-    "countryCode": "US"
+    "countryCode": "US",
+    "category": "State"
   }
 ]

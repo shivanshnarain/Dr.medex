@@ -33,6 +33,7 @@ export interface GeoSubdivision {
   code: string;
   name: string;
   countryCode: string;
+  category?: "State" | "Federal District" | "Territory" | "Province" | "Region" | string;
 }
 
 export interface GeoCity {
@@ -171,7 +172,10 @@ export async function loadSubdivisions(countryCode: string): Promise<GeoSubdivis
   try {
     const mod = await loader();
     const data = (mod && mod.default) ? mod.default : (mod as unknown as GeoSubdivision[]);
-    const list = Array.isArray(data) ? data : [];
+    let list = Array.isArray(data) ? data : [];
+    if (code === "US") {
+      list = list.filter((s) => !s.code.startsWith("UM-") && s.code !== "UM");
+    }
     subdivisionsCache.set(code, list);
     return list;
   } catch (err) {

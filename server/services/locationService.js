@@ -38,6 +38,26 @@ function getStatesByCountry(countryCode) {
   if (!countryCode) return [];
   const cleanCode = String(countryCode).trim().toUpperCase();
   const states = State.getStatesOfCountry(cleanCode);
+
+  if (cleanCode === "US") {
+    const EXCLUDED_UM_CODES = new Set(["UM-81", "UM-84", "UM-86", "UM-67", "UM-89", "UM-71", "UM-76", "UM-95", "UM-79", "UM"]);
+    const US_TERRITORIES = new Set(["AS", "GU", "MP", "PR", "VI"]);
+    return states
+      .filter((s) => !EXCLUDED_UM_CODES.has(s.isoCode))
+      .map((s) => {
+        let category = "State";
+        if (s.isoCode === "DC") category = "Federal District";
+        else if (US_TERRITORIES.has(s.isoCode)) category = "Territory";
+        return {
+          code: s.isoCode,
+          name: s.name,
+          countryCode: s.countryCode,
+          category
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   return states.map((s) => ({
     code: s.isoCode,
     name: s.name,
@@ -533,23 +553,13 @@ async function reverseGeocode(lat, lng, reportedAccuracy = null) {
       normalizedCity = cleanedCity;
     }
 
-    // Try finding exact or closest city in database
+    // Canonical city matching: match exact database entry if present, never arbitrarily substitute
     if (targetCountryCode && normalizedStateCode) {
       const cscCities = City.getCitiesOfState(targetCountryCode, normalizedStateCode);
       if (Array.isArray(cscCities) && cscCities.length > 0) {
         const exact = cscCities.find((c) => c.name.toLowerCase() === normalizedCity.toLowerCase());
         if (exact) {
           normalizedCity = exact.name;
-        } else {
-          const candidates = cscCities.filter((c) => {
-            const a = c.name.toLowerCase();
-            const b = normalizedCity.toLowerCase();
-            return a.startsWith(b.slice(0, 5)) || b.startsWith(a.slice(0, 5));
-          });
-          if (candidates.length > 0) {
-            candidates.sort((a, b) => Math.abs(a.name.length - normalizedCity.length) - Math.abs(b.name.length - normalizedCity.length));
-            normalizedCity = candidates[0].name;
-          }
         }
       }
     }

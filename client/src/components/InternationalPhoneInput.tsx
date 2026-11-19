@@ -210,14 +210,14 @@ export const InternationalPhoneInput: React.FC<InternationalPhoneInputProps> = (
         onChange={handleNumberChange}
         placeholder={placeholder}
         required={required}
-        className="w-full px-3.5 py-2.5 text-xs text-[#171717] font-medium placeholder-neutral-400 rounded-r-xl focus:outline-none bg-transparent"
+        className="w-full px-3.5 py-2.5 text-[16px] sm:text-xs text-[#171717] font-medium placeholder-neutral-400 rounded-r-xl focus:outline-none bg-transparent"
       />
 
       {/* Dropdown Menu for All 195 Countries */}
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="absolute top-full left-0 mt-1.5 w-80 max-h-72 overflow-y-auto bg-white border border-neutral-200 rounded-xl shadow-xl z-50 py-2 animate-in fade-in zoom-in-95 duration-100"
+          className="absolute top-full left-0 mt-1.5 w-[calc(100vw-2.5rem)] sm:w-80 max-w-sm max-h-72 overflow-y-auto bg-white border border-neutral-200 rounded-xl shadow-xl z-50 py-2 animate-in fade-in zoom-in-95 duration-100"
         >
           <div className="px-3 pb-2 border-b border-neutral-100 sticky top-0 bg-white z-10">
             <div className="relative">
@@ -227,7 +227,7 @@ export const InternationalPhoneInput: React.FC<InternationalPhoneInputProps> = (
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search country, ISO code, or dial code (+91, +92, +1)..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-neutral-50 border border-neutral-200 rounded-lg focus:outline-none focus:border-[#7AA05A] text-neutral-800 placeholder-neutral-400"
+                className="w-full pl-8 pr-3 py-1.5 text-[16px] sm:text-xs bg-neutral-50 border border-neutral-200 rounded-lg focus:outline-none focus:border-[#7AA05A] text-neutral-800 placeholder-neutral-400"
                 autoFocus
               />
             </div>

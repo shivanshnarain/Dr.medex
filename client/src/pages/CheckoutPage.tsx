@@ -451,54 +451,65 @@ export const CheckoutPage: React.FC = () => {
     const newDistrict = loc.district || "";
     const newPostalCode = loc.postalCode || "";
 
+    // Check if customer has already entered address fields to avoid silently overwriting them
+    const hasExistingAddress = Boolean(
+      (addressLine1 && addressLine1.trim().length > 3) ||
+      (city && city.trim().length > 2) ||
+      (postalCode && postalCode.trim().length > 2)
+    );
+
     if (newCountryCode) {
       setCountryCode(newCountryCode);
       if (billingSameAsShipping) setBillingCountryCode(newCountryCode);
     }
-    if (newState) {
+    if (newState && (!state.trim() || !hasExistingAddress)) {
       setState(newState);
       if (billingSameAsShipping) setBillingState(newState);
     }
-    if (newStateCode) {
+    if (newStateCode && (!stateCode.trim() || !hasExistingAddress)) {
       setStateCode(newStateCode);
     }
-    if (newCity) {
+    if (newCity && (!city.trim() || !hasExistingAddress)) {
       setCity(newCity);
       if (billingSameAsShipping) setBillingCity(newCity);
     }
-    if (newDistrict) {
+    if (newDistrict && (!district.trim() || !hasExistingAddress)) {
       setDistrict(newDistrict);
     }
-    if (newPostalCode) {
+    if (newPostalCode && (!postalCode.trim() || !hasExistingAddress)) {
       setPostalCode(newPostalCode);
       if (billingSameAsShipping) setBillingPostalCode(newPostalCode);
     }
-    if (loc.streetAddress) {
-      setAddressLine1(loc.streetAddress);
-      setAutocompleteQuery(loc.formattedAddress || loc.streetAddress);
-      if (billingSameAsShipping) setBillingAddressLine1(loc.streetAddress);
-    } else if (loc.formattedAddress) {
-      const firstLine = loc.formattedAddress.split(",")[0].trim();
-      setAddressLine1(firstLine);
-      setAutocompleteQuery(loc.formattedAddress);
-      if (billingSameAsShipping) setBillingAddressLine1(firstLine);
+    if (!hasExistingAddress) {
+      if (loc.streetAddress) {
+        setAddressLine1(loc.streetAddress);
+        setAutocompleteQuery(loc.formattedAddress || loc.streetAddress);
+        if (billingSameAsShipping) setBillingAddressLine1(loc.streetAddress);
+      } else if (loc.formattedAddress) {
+        const firstLine = loc.formattedAddress.split(",")[0].trim();
+        setAddressLine1(firstLine);
+        setAutocompleteQuery(loc.formattedAddress);
+        if (billingSameAsShipping) setBillingAddressLine1(firstLine);
+      }
     }
 
-    // Immediately persist to localStorage draft so it matches the freshly detected address
+    // Immediately persist to localStorage draft
     try {
       const savedDraftRaw = localStorage.getItem(GUEST_CHECKOUT_STORAGE_KEY);
       const draft = savedDraftRaw ? JSON.parse(savedDraftRaw) : {};
       draft.country = loc.country;
       draft.countryCode = newCountryCode;
-      draft.state = newState;
-      draft.stateCode = newStateCode;
-      draft.city = newCity;
-      draft.district = newDistrict;
-      draft.postalCode = newPostalCode;
-      if (loc.streetAddress) {
-        draft.addressLine1 = loc.streetAddress;
-      } else if (loc.formattedAddress) {
-        draft.addressLine1 = loc.formattedAddress.split(",")[0].trim();
+      if (!hasExistingAddress || !draft.state) draft.state = newState;
+      if (!hasExistingAddress || !draft.stateCode) draft.stateCode = newStateCode;
+      if (!hasExistingAddress || !draft.city) draft.city = newCity;
+      if (!hasExistingAddress || !draft.district) draft.district = newDistrict;
+      if (!hasExistingAddress || !draft.postalCode) draft.postalCode = newPostalCode;
+      if (!hasExistingAddress) {
+        if (loc.streetAddress) {
+          draft.addressLine1 = loc.streetAddress;
+        } else if (loc.formattedAddress) {
+          draft.addressLine1 = loc.formattedAddress.split(",")[0].trim();
+        }
       }
       localStorage.setItem(GUEST_CHECKOUT_STORAGE_KEY, JSON.stringify(draft));
     } catch (e) {}
@@ -507,12 +518,21 @@ export const CheckoutPage: React.FC = () => {
       sessionStorage.setItem("drmedex_location_session_dismissed", "true");
     } catch (e) {}
 
-    // Location notice MUST use the EXACT same [newCity, newState, loc.country] populated in the form fields
+    // Location notice includes precision and informs if existing address was preserved
     const locSummary = [newCity, newState, loc.country].filter(Boolean).join(", ");
-    if (loc.accuracy && loc.accuracy > 2000) {
-      setLocationNotice(`Approximate location detected: ${locSummary} (~${Math.round(loc.accuracy / 1000)} km precision) — Please verify your delivery address.`);
+    if (loc.accuracy && loc.accuracy > 1500) {
+      const km = Math.round(loc.accuracy / 1000);
+      setLocationNotice(
+        `Approximate location detected: ${locSummary} (±${km} km precision). ${
+          hasExistingAddress ? "Your existing address was preserved." : "Please verify your delivery address."
+        }`
+      );
     } else {
-      setLocationNotice(`Location detected: ${locSummary} — Please verify your delivery address.`);
+      setLocationNotice(
+        `Location detected: ${locSummary} (±${loc.accuracy || 50}m precision). ${
+          hasExistingAddress ? "Your existing address was preserved." : "Please verify your delivery address."
+        }`
+      );
     }
   };
 
@@ -610,15 +630,10 @@ export const CheckoutPage: React.FC = () => {
       window.history.replaceState({}, "", cleanUrl);
     }
 
-    // 1. Check if detectedLocation was passed freshly via navigation state
+    // 1. Check if detectedLocation was passed explicitly via navigation state
     const stateLoc = (routeLocation.state as any)?.detectedLocation;
     if (stateLoc) {
       handleLocationDetected(stateLoc);
-      return;
-    }
-
-    // If customer arrived via Buy Now or already handled location prompt this session, do not re-prompt
-    if ((routeLocation.state as any)?.fromBuyNow || (routeLocation.state as any)?.locationPromptHandled) {
       return;
     }
 
@@ -627,46 +642,6 @@ export const CheckoutPage: React.FC = () => {
         "Location access is currently disabled in your browser. You can enter your delivery address manually below, or enable location in your browser site settings."
       );
       return;
-    }
-
-    if (!hasCheckoutIntent) {
-      return;
-    }
-
-    // Check if location prompt was already dismissed in this session
-    let isSessionDismissed = false;
-    try {
-      isSessionDismissed = sessionStorage.getItem("drmedex_location_session_dismissed") === "true";
-    } catch (e) {}
-
-    if (isSessionDismissed) {
-      return;
-    }
-
-    // Check Permissions API if available
-    if (typeof navigator !== "undefined" && navigator.permissions && navigator.permissions.query) {
-      navigator.permissions
-        .query({ name: "geolocation" as PermissionName })
-        .then((permissionStatus) => {
-          if (permissionStatus.state === "granted") {
-            // Permission ALREADY granted: retrieve position directly without displaying modal
-            handleDirectDetectLocation();
-          } else if (permissionStatus.state === "denied") {
-            // Previously denied in browser: do not repeatedly trigger prompt, show helpful non-intrusive tip
-            setLocationNotice(
-              "Location access is currently disabled in your browser. You can enter your delivery address manually below, or enable location in your browser site settings."
-            );
-          } else {
-            // Default / prompt state: display DR.MEDEX location permission modal
-            setShowLocationPrompt(true);
-          }
-        })
-        .catch(() => {
-          // Permissions API query not supported or failed: open DR.MEDEX custom prompt
-          setShowLocationPrompt(true);
-        });
-    } else {
-      setShowLocationPrompt(true);
     }
   }, [routeLocation.search, routeLocation.state]);
 
@@ -2254,7 +2229,7 @@ export const CheckoutPage: React.FC = () => {
                                 onChange={(e) => setAuthEmail(e.target.value)}
                                 placeholder="Enter your email"
                                 required
-                                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-neutral-300 text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20"
+                                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-neutral-300 text-[16px] sm:text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20"
                               />
                             </div>
                           </div>
@@ -2284,7 +2259,7 @@ export const CheckoutPage: React.FC = () => {
                                 onChange={(e) => setAuthPassword(e.target.value)}
                                 placeholder="Enter your password"
                                 required
-                                className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-300 text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20"
+                                className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-300 text-[16px] sm:text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20"
                               />
                               <button
                                 type="button"
@@ -2361,7 +2336,7 @@ export const CheckoutPage: React.FC = () => {
                               onChange={(e) => setForgotPasswordEmail(e.target.value)}
                               placeholder="Enter your email"
                               required
-                              className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-neutral-300 text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20"
+                              className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-neutral-300 text-[16px] sm:text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20"
                             />
                           </div>
                         </div>
@@ -2431,7 +2406,7 @@ export const CheckoutPage: React.FC = () => {
                                 onChange={(e) => setAuthFullName(e.target.value)}
                                 placeholder="Enter your name"
                                 required
-                                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-neutral-300 text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20"
+                                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-neutral-300 text-[16px] sm:text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20"
                               />
                             </div>
                           </div>
@@ -2448,7 +2423,7 @@ export const CheckoutPage: React.FC = () => {
                                 onChange={(e) => setAuthEmail(e.target.value)}
                                 placeholder="Enter your email"
                                 required
-                                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-neutral-300 text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20"
+                                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-neutral-300 text-[16px] sm:text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20"
                               />
                             </div>
                           </div>
@@ -2465,7 +2440,7 @@ export const CheckoutPage: React.FC = () => {
                                 onChange={(e) => setAuthPhone(e.target.value)}
                                 placeholder="Enter your phone number"
                                 required
-                                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-neutral-300 text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20"
+                                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-neutral-300 text-[16px] sm:text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20"
                               />
                             </div>
                           </div>
@@ -2483,7 +2458,7 @@ export const CheckoutPage: React.FC = () => {
                                 placeholder="Enter your password"
                                 required
                                 minLength={6}
-                                className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-300 text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20"
+                                className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-300 text-[16px] sm:text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20"
                               />
                               <button
                                 type="button"
@@ -2508,7 +2483,7 @@ export const CheckoutPage: React.FC = () => {
                                 placeholder="Confirm your password"
                                 required
                                 minLength={6}
-                                className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-300 text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20"
+                                className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-300 text-[16px] sm:text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20"
                               />
                               <button
                                 type="button"
@@ -2572,7 +2547,7 @@ export const CheckoutPage: React.FC = () => {
                           type="text"
                           value={editFullName}
                           onChange={(e) => setEditFullName(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl border border-neutral-300 text-xs font-medium focus:outline-none focus:border-[#7AA05A]"
+                          className="w-full px-3 py-2 rounded-xl border border-neutral-300 text-[16px] sm:text-xs font-medium focus:outline-none focus:border-[#7AA05A]"
                           placeholder="Enter your name"
                         />
                       </div>
@@ -2582,7 +2557,7 @@ export const CheckoutPage: React.FC = () => {
                           type="email"
                           value={editEmail}
                           onChange={(e) => setEditEmail(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl border border-neutral-300 text-xs font-medium focus:outline-none focus:border-[#7AA05A]"
+                          className="w-full px-3 py-2 rounded-xl border border-neutral-300 text-[16px] sm:text-xs font-medium focus:outline-none focus:border-[#7AA05A]"
                           placeholder="Enter your email ID"
                         />
                       </div>
@@ -2592,7 +2567,7 @@ export const CheckoutPage: React.FC = () => {
                           type="tel"
                           value={editPhone}
                           onChange={(e) => setEditPhone(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl border border-neutral-300 text-xs font-medium focus:outline-none focus:border-[#7AA05A]"
+                          className="w-full px-3 py-2 rounded-xl border border-neutral-300 text-[16px] sm:text-xs font-medium focus:outline-none focus:border-[#7AA05A]"
                           placeholder="Enter your phone number"
                         />
                       </div>
@@ -2824,7 +2799,7 @@ export const CheckoutPage: React.FC = () => {
                     value={deliveryInstructions}
                     onChange={(e) => setDeliveryInstructions(e.target.value)}
                     placeholder="Any special delivery instructions? (Optional)"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-300 bg-white text-[#171717] font-medium focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20 transition-all placeholder:text-neutral-400 text-xs resize-none"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-300 bg-white text-[#171717] font-medium focus:outline-none focus:border-[#7AA05A] focus:ring-2 focus:ring-[#7AA05A]/20 transition-all placeholder:text-neutral-400 text-[16px] sm:text-xs resize-none"
                   />
                   <div className="pt-1">
                     <label className="flex items-center gap-2 cursor-pointer select-none text-2xs text-[#171717]">
@@ -3230,7 +3205,7 @@ export const CheckoutPage: React.FC = () => {
                     required
                     defaultValue={editingAddress?.fullName || fullName}
                     placeholder="Enter your full name"
-                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 focus:outline-none focus:border-[#7AA05A]"
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 text-[16px] sm:text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A]"
                   />
                 </div>
 
@@ -3241,7 +3216,7 @@ export const CheckoutPage: React.FC = () => {
                     name="companyName"
                     defaultValue={editingAddress?.companyName || companyName}
                     placeholder="Enter hospital or organization name"
-                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 focus:outline-none focus:border-[#7AA05A]"
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 text-[16px] sm:text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A]"
                   />
                 </div>
 
@@ -3253,7 +3228,7 @@ export const CheckoutPage: React.FC = () => {
                     required
                     defaultValue={editingAddress?.phone || phone}
                     placeholder="Enter your phone number"
-                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 focus:outline-none focus:border-[#7AA05A]"
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 text-[16px] sm:text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A]"
                   />
                 </div>
 
@@ -3262,7 +3237,7 @@ export const CheckoutPage: React.FC = () => {
                   <select
                     name="countryCode"
                     defaultValue={editingAddress?.countryCode || countryCode}
-                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 bg-white font-medium focus:outline-none focus:border-[#7AA05A]"
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 bg-white font-medium text-[16px] sm:text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A]"
                   >
                     {countriesList.map((c) => (
                       <option key={c.code} value={c.code}>
@@ -3280,7 +3255,7 @@ export const CheckoutPage: React.FC = () => {
                     required
                     defaultValue={editingAddress?.addressLine1 || addressLine1}
                     placeholder="Building, street, suite number"
-                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 focus:outline-none focus:border-[#7AA05A]"
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 text-[16px] sm:text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A]"
                   />
                 </div>
 
@@ -3291,7 +3266,7 @@ export const CheckoutPage: React.FC = () => {
                     name="addressLine2"
                     defaultValue={editingAddress?.addressLine2 || addressLine2}
                     placeholder="Department, floor, loading dock"
-                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 focus:outline-none focus:border-[#7AA05A]"
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 text-[16px] sm:text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A]"
                   />
                 </div>
 
@@ -3304,7 +3279,7 @@ export const CheckoutPage: React.FC = () => {
                       required
                       defaultValue={editingAddress?.city || city}
                       placeholder="Enter city"
-                      className="w-full px-3 py-2 rounded-xl border border-neutral-300 focus:outline-none focus:border-[#7AA05A]"
+                      className="w-full px-3 py-2 rounded-xl border border-neutral-300 text-[16px] sm:text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A]"
                     />
                   </div>
                   <div>
@@ -3314,7 +3289,7 @@ export const CheckoutPage: React.FC = () => {
                       name="postalCode"
                       defaultValue={editingAddress?.postalCode || postalCode}
                       placeholder="Enter postal code"
-                      className="w-full px-3 py-2 rounded-xl border border-neutral-300 focus:outline-none focus:border-[#7AA05A]"
+                      className="w-full px-3 py-2 rounded-xl border border-neutral-300 text-[16px] sm:text-xs text-[#171717] focus:outline-none focus:border-[#7AA05A]"
                     />
                   </div>
                 </div>
