@@ -550,6 +550,33 @@ async function getRefundDetails(refundId) {
 }
 
 /**
+ * Validate PayPal certificate URL against strict domain, protocol, and path requirements
+ */
+function validatePayPalCertUrl(certUrl) {
+  if (!certUrl || typeof certUrl !== "string") {
+    return { valid: false, isSandbox: false, reason: "Missing certUrl" };
+  }
+  try {
+    const parsed = new URL(certUrl);
+    if (parsed.protocol !== "https:") {
+      return { valid: false, isSandbox: false, reason: "Insecure protocol (must be https)" };
+    }
+    const hostname = parsed.hostname.toLowerCase();
+    const isPayPalHost = hostname === "paypal.com" || hostname.endsWith(".paypal.com");
+    if (!isPayPalHost) {
+      return { valid: false, isSandbox: false, reason: `Untrusted certificate host: ${hostname}` };
+    }
+    if (!parsed.pathname.startsWith("/v1/notifications/certs/")) {
+      return { valid: false, isSandbox: false, reason: "Invalid certificate pathname" };
+    }
+    const isSandbox = hostname.includes("sandbox.paypal.com");
+    return { valid: true, isSandbox, hostname };
+  } catch (err) {
+    return { valid: false, isSandbox: false, reason: `Malformed URL: ${err.message}` };
+  }
+}
+
+/**
  * Verify Webhook Event Signature
  * Automatically validates both Live and Sandbox webhook signatures against their authoritative PayPal endpoint.
  */
@@ -566,7 +593,13 @@ async function verifyWebhookSignature({
     return true;
   }
 
-  const isSandboxCert = Boolean(certUrl && certUrl.includes("sandbox.paypal.com"));
+  const certCheck = validatePayPalCertUrl(certUrl);
+  if (!certCheck.valid) {
+    console.warn(`[PayPal Webhook] Certificate URL security validation failed: ${certCheck.reason} (${certUrl})`);
+    return false;
+  }
+
+  const isSandboxCert = certCheck.isSandbox;
   const targetMode = isSandboxCert ? "sandbox" : getMode();
   const token = await getAccessToken(targetMode);
   const baseUrl = targetMode === "sandbox" ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
@@ -605,6 +638,7 @@ module.exports = {
   refundCapture,
   getRefundDetails,
   verifyWebhookSignature,
+  validatePayPalCertUrl,
   getClientId,
   getClientSecret,
   getWebhookId,

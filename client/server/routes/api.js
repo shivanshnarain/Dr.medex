@@ -687,7 +687,8 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
     const authAlgo = req.headers["paypal-auth-algo"] || null;
     const transmissionSig = req.headers["paypal-transmission-sig"] || null;
 
-    const isSandboxCert = Boolean(certUrl && certUrl.includes("sandbox.paypal.com"));
+    const certCheck = paypalService.validatePayPalCertUrl(certUrl);
+    const isSandboxCert = certCheck.valid ? certCheck.isSandbox : false;
     const environment = isSandboxCert
       ? "SANDBOX"
       : (paypalService.getMode() === "sandbox" ? "SANDBOX" : "LIVE");
@@ -821,6 +822,16 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
       // Strict Guard: only mark as PAID if capture status is COMPLETED
       if (orderNumber && captureStatus === "COMPLETED") {
         try {
+          const targetOrder = await orderService.getOrder(orderNumber).catch(() => null);
+          if (targetOrder) {
+            // Environment Isolation Guard: Sandbox events cannot mark a Live order as PAID
+            const isLiveOrder = targetOrder.payment?.mode === "live" || (process.env.PAYPAL_MODE === "live" && !targetOrder.orderNumber.startsWith("TEST-") && !targetOrder.orderNumber.startsWith("SANDBOX-"));
+            if (environment === "SANDBOX" && isLiveOrder && process.env.NODE_ENV !== "test") {
+              console.warn(`[PayPal Webhook] Security Guard: Rejected Sandbox event attempt to mark Live order #${orderNumber} as PAID.`);
+              return res.status(200).json({ received: true, ignored: true, reason: "Sandbox event cannot update Live order" });
+            }
+          }
+
           await orderService.markOrderAsPaid({
             orderNumber,
             paypalOrderId: resource?.supplementary_data?.related_ids?.order_id || null,

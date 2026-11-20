@@ -7,6 +7,22 @@ server/data/*.backup*
 *.backup*
 client/server/data/backups
 
+# Large non-runtime scraper dumps & audit reports
+server/data/physiotherapy_scraped_products.json
+server/data/extracted_products.json
+server/data/price_sync_report.json
+server/data/reference_catalogue_audit.json
+server/data/physio_category_audit.json
+server/data/crawled_urls.json
+server/services/*.py
+client/server/data/physiotherapy_scraped_products.json
+client/server/data/extracted_products.json
+client/server/data/price_sync_report.json
+client/server/data/reference_catalogue_audit.json
+client/server/data/physio_category_audit.json
+client/server/data/crawled_urls.json
+client/server/services/*.py
+
 # Test suites and development artifacts
 server/tests
 client/server/tests
