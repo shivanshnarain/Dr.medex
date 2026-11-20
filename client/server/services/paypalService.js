@@ -13,12 +13,15 @@ function stripQuotes(val) {
 }
 
 function getMode() {
+  const raw = stripQuotes(process.env.PAYPAL_MODE || "").toLowerCase();
+  if (raw) {
+    return raw;
+  }
   const vercelEnv = stripQuotes(process.env.VERCEL_ENV || "").toLowerCase();
   if (vercelEnv === "preview" || vercelEnv === "development") {
     return "sandbox";
   }
-  const raw = stripQuotes(process.env.PAYPAL_MODE || "sandbox").toLowerCase();
-  return raw || "sandbox";
+  return "sandbox";
 }
 
 function getClientId(explicitMode) {
