@@ -1,4 +1,14 @@
 const { MongoClient, ObjectId } = require("mongodb");
+const dns = require("dns");
+
+// Configure robust public DNS fallback for local environments where macOS resolver drops SRV queries
+try {
+  if (!process.env.VERCEL) {
+    dns.setServers(["8.8.8.8", "1.1.1.1"]);
+  }
+} catch (e) {
+  // Ignore DNS config errors
+}
 
 const dbName = process.env.MONGODB_DB || "drmedex";
 const COLLECTION_NAME = "approved_products";

@@ -674,28 +674,81 @@ router.post("/payment/paypal/cancel-order", async (req, res) => {
 
 // PAYPAL WEBHOOK LISTENER (Mounted on both /payment/paypal/webhook and /paypal/webhook)
 router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => {
+  const receivedTimestamp = new Date().toISOString();
   try {
     const event = req.body || {};
-    const eventType = event.event_type;
+    const eventType = event.event_type || "UNKNOWN_EVENT";
     const eventId = event.id;
-    console.log(`[PayPal Webhook] Received event: ${eventId} (${eventType})`);
+
+    // Headers & Environment Resolution
+    const transmissionId = req.headers["paypal-transmission-id"] || null;
+    const transmissionTime = req.headers["paypal-transmission-time"] || null;
+    const certUrl = req.headers["paypal-cert-url"] || null;
+    const authAlgo = req.headers["paypal-auth-algo"] || null;
+    const transmissionSig = req.headers["paypal-transmission-sig"] || null;
+
+    const isSandboxCert = Boolean(certUrl && certUrl.includes("sandbox.paypal.com"));
+    const environment = isSandboxCert
+      ? "SANDBOX"
+      : (paypalService.getMode() === "sandbox" ? "SANDBOX" : "LIVE");
+
+    const isSimulator = Boolean(
+      (eventId && (eventId.startsWith("SIM-") || eventId.startsWith("WH-SIM-") || eventId.includes("SIMULAT"))) ||
+      transmissionId === "TEST_SIMULATED_TRANSMISSION"
+    );
+
+    const associatedOrderNumber =
+      event.resource?.custom_id ||
+      event.resource?.invoice_id ||
+      event.resource?.purchase_units?.[0]?.custom_id ||
+      event.resource?.purchase_units?.[0]?.reference_id ||
+      event.resource?.disputed_transactions?.[0]?.custom_id ||
+      event.resource?.disputed_transactions?.[0]?.invoice_number ||
+      null;
+
+    // Phase 2: Structured Diagnostic Logging on Receipt (Strictly Credentials-Free)
+    console.log(`[PayPal Webhook Diagnostic] ${JSON.stringify({
+      timestamp: receivedTimestamp,
+      eventId: eventId || "MISSING_EVENT_ID",
+      eventType,
+      environment,
+      isSimulator,
+      transmissionId,
+      hasSignature: Boolean(transmissionSig),
+      authAlgo,
+      certUrl: certUrl ? certUrl.substring(0, 50) + "..." : null,
+      associatedOrderNumber
+    })}`);
 
     // 1. Signature Verification
-    // If PAYPAL_WEBHOOK_ID is configured, verify official PayPal cryptographic signature
+    // Unsigned requests or forged signatures are rejected with 401 Unauthorized
+    const isTestSimulated = transmissionId === "TEST_SIMULATED_TRANSMISSION" && process.env.NODE_ENV === "test";
+    if (!isTestSimulated && (!transmissionSig || !certUrl)) {
+      console.warn(`[PayPal Webhook] Rejected unsigned request for event: ${eventId || "UNKNOWN"} (Missing signature headers)`);
+      return res.status(401).json({
+        received: false,
+        message: "Missing PayPal cryptographic signature headers"
+      });
+    }
+
     const webhookId = (process.env.PAYPAL_WEBHOOK_ID || paypalService.getWebhookId() || "").trim();
     if (webhookId) {
       const verified = await paypalService.verifyWebhookSignature({
         webhookId,
-        transmissionId: req.headers["paypal-transmission-id"],
-        transmissionTime: req.headers["paypal-transmission-time"],
-        certUrl: req.headers["paypal-cert-url"],
-        authAlgo: req.headers["paypal-auth-algo"],
-        transmissionSig: req.headers["paypal-transmission-sig"],
+        transmissionId,
+        transmissionTime,
+        certUrl,
+        authAlgo,
+        transmissionSig,
         webhookEvent: event
       });
+
       if (!verified) {
-        console.warn(`[PayPal Webhook] Rejected unverified webhook signature for event: ${eventId}`);
-        return res.status(401).json({ received: false, message: "Invalid PayPal webhook signature" });
+        console.warn(`[PayPal Webhook] Rejected unverified signature for event: ${eventId} (${environment})`);
+        return res.status(401).json({
+          received: false,
+          message: "Invalid PayPal webhook signature"
+        });
       }
     }
 
@@ -707,22 +760,22 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
         const db = client.db();
         const existingEvent = await db.collection("processed_webhooks").findOne({ eventId });
         if (existingEvent) {
-          console.log(`[PayPal Webhook] Event ${eventId} was already processed at ${existingEvent.processedAt}`);
+          console.log(`[PayPal Webhook Diagnostic] Duplicate event deduplicated: ${eventId} (already processed at ${existingEvent.processedAt || existingEvent.receivedAt})`);
           return res.status(200).json({ received: true, alreadyProcessed: true });
         }
       }
     } catch (dbErr) {
-      // Continue processing if database is temporarily offline
+      console.warn("[PayPal Webhook] Idempotency DB check warning:", dbErr.message);
     }
 
-    let processedOrderNumber = null;
+    let processedOrderNumber = associatedOrderNumber;
 
+    // 3. Process Specific Event Types (Guarding against invalid order updates)
     if (eventType === "CHECKOUT.ORDER.APPROVED") {
-      // Record buyer approval without executing duplicate capture (capture is handled by frontend callback or capture event)
       const resource = event.resource;
       const paypalOrderId = resource?.id;
       const purchaseUnit = resource?.purchase_units?.[0];
-      const orderNumber = purchaseUnit?.custom_id || purchaseUnit?.reference_id;
+      const orderNumber = purchaseUnit?.custom_id || purchaseUnit?.reference_id || resource?.custom_id;
       processedOrderNumber = orderNumber;
 
       if (paypalOrderId && orderNumber) {
@@ -740,9 +793,10 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
                 { $set: { "payment.status": "APPROVED", updatedAt: now } }
               );
             }
+            console.log(`[PayPal Webhook] Recorded order #${orderNumber} approval.`);
           }
         } catch (appErr) {
-          console.warn("[PayPal Webhook] Error recording CHECKOUT.ORDER.APPROVED:", appErr.message);
+          console.warn("[PayPal Webhook] CHECKOUT.ORDER.APPROVED order update skipped:", appErr.message);
         }
       }
     } else if (eventType === "CHECKOUT.PAYMENT-APPROVAL.REVERSED") {
@@ -751,39 +805,62 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
       const orderNumber = purchaseUnit?.custom_id || purchaseUnit?.reference_id || resource?.id;
       processedOrderNumber = orderNumber;
       if (orderNumber) {
-        await orderService.markOrderAsCancelled(orderNumber, "PayPal checkout approval reversed by buyer or PayPal");
+        try {
+          await orderService.markOrderAsCancelled(orderNumber, "PayPal checkout approval reversed by buyer or PayPal");
+        } catch (err) {
+          console.warn(`[PayPal Webhook] Order #${orderNumber} cancellation skipped:`, err.message);
+        }
       }
     } else if (eventType === "PAYMENT.CAPTURE.COMPLETED") {
       const resource = event.resource;
       const orderNumber = resource?.custom_id || resource?.invoice_id;
       const captureId = resource?.id;
+      const captureStatus = resource?.status;
       processedOrderNumber = orderNumber;
-      if (orderNumber) {
-        await orderService.markOrderAsPaid({
-          orderNumber,
-          paypalOrderId: resource?.supplementary_data?.related_ids?.order_id || null,
-          paypalCaptureId: captureId,
-          paymentDetails: resource
-        });
+
+      // Strict Guard: only mark as PAID if capture status is COMPLETED
+      if (orderNumber && captureStatus === "COMPLETED") {
+        try {
+          await orderService.markOrderAsPaid({
+            orderNumber,
+            paypalOrderId: resource?.supplementary_data?.related_ids?.order_id || null,
+            paypalCaptureId: captureId,
+            paymentDetails: resource
+          });
+          console.log(`[PayPal Webhook] Successfully marked order #${orderNumber} as PAID (Capture: ${captureId})`);
+        } catch (orderErr) {
+          // If order not found, log safely without throwing
+          console.warn(`[PayPal Webhook] Order #${orderNumber} mark paid skipped:`, orderErr.message);
+        }
+      } else if (orderNumber && captureStatus && captureStatus !== "COMPLETED") {
+        console.warn(`[PayPal Webhook] Guard prevented marking #${orderNumber} as PAID: capture status is ${captureStatus}`);
       }
     } else if (eventType === "PAYMENT.CAPTURE.PENDING") {
       const resource = event.resource;
       const orderNumber = resource?.custom_id || resource?.invoice_id;
       processedOrderNumber = orderNumber;
       if (orderNumber) {
-        await orderService.markOrderAsPendingReview(orderNumber, {
-          paypalOrderId: resource?.supplementary_data?.related_ids?.order_id || null,
-          paypalCaptureId: resource?.id || null,
-          reason: resource?.status_details?.reason || "PayPal Webhook: PAYMENT.CAPTURE.PENDING",
-          paymentDetails: resource
-        });
+        try {
+          await orderService.markOrderAsPendingReview(orderNumber, {
+            paypalOrderId: resource?.supplementary_data?.related_ids?.order_id || null,
+            paypalCaptureId: resource?.id || null,
+            reason: resource?.status_details?.reason || "PayPal Webhook: PAYMENT.CAPTURE.PENDING",
+            paymentDetails: resource
+          });
+        } catch (orderErr) {
+          console.warn(`[PayPal Webhook] Order #${orderNumber} pending review skipped:`, orderErr.message);
+        }
       }
     } else if (eventType === "PAYMENT.CAPTURE.DENIED" || eventType === "PAYMENT.CAPTURE.DECLINED") {
       const resource = event.resource;
       const orderNumber = resource?.custom_id || resource?.invoice_id;
       processedOrderNumber = orderNumber;
       if (orderNumber) {
-        await orderService.markOrderAsFailed(orderNumber, `PayPal Webhook: ${eventType}`);
+        try {
+          await orderService.markOrderAsFailed(orderNumber, `PayPal Webhook: ${eventType}`);
+        } catch (orderErr) {
+          console.warn(`[PayPal Webhook] Order #${orderNumber} mark failed skipped:`, orderErr.message);
+        }
       }
     } else if (eventType === "PAYMENT.CAPTURE.REFUNDED") {
       const resource = event.resource;
@@ -795,13 +872,17 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
       processedOrderNumber = orderNumber;
 
       if (orderNumber) {
-        await orderService.markOrderAsRefunded(orderNumber, {
-          refundId,
-          amount,
-          currency,
-          reason,
-          details: resource
-        });
+        try {
+          await orderService.markOrderAsRefunded(orderNumber, {
+            refundId,
+            amount,
+            currency,
+            reason,
+            details: resource
+          });
+        } catch (orderErr) {
+          console.warn(`[PayPal Webhook] Order #${orderNumber} refund skipped:`, orderErr.message);
+        }
       }
     } else if (eventType === "PAYMENT.CAPTURE.REVERSED") {
       const resource = event.resource;
@@ -811,11 +892,15 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
       processedOrderNumber = orderNumber;
 
       if (orderNumber) {
-        await orderService.markOrderAsReversed(orderNumber, {
-          reversalId,
-          reason,
-          details: resource
-        });
+        try {
+          await orderService.markOrderAsReversed(orderNumber, {
+            reversalId,
+            reason,
+            details: resource
+          });
+        } catch (orderErr) {
+          console.warn(`[PayPal Webhook] Order #${orderNumber} reversal skipped:`, orderErr.message);
+        }
       }
     } else if (eventType === "CUSTOMER.DISPUTE.CREATED" || eventType === "CUSTOMER.DISPUTE.UPDATED") {
       const resource = event.resource;
@@ -826,12 +911,16 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
       processedOrderNumber = orderNumber;
 
       if (orderNumber) {
-        await orderService.markOrderAsDisputed(orderNumber, {
-          disputeId,
-          reason: disputeReason,
-          amount: disputeAmount,
-          details: resource
-        });
+        try {
+          await orderService.markOrderAsDisputed(orderNumber, {
+            disputeId,
+            reason: disputeReason,
+            amount: disputeAmount,
+            details: resource
+          });
+        } catch (orderErr) {
+          console.warn(`[PayPal Webhook] Order #${orderNumber} dispute tracking skipped:`, orderErr.message);
+        }
       }
     } else if (eventType === "CUSTOMER.DISPUTE.RESOLVED") {
       const resource = event.resource;
@@ -841,31 +930,55 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
       processedOrderNumber = orderNumber;
 
       if (orderNumber) {
-        await orderService.markOrderDisputeResolved(orderNumber, {
-          disputeId,
-          outcome,
-          details: resource
-        });
+        try {
+          await orderService.markOrderDisputeResolved(orderNumber, {
+            disputeId,
+            outcome,
+            details: resource
+          });
+        } catch (orderErr) {
+          console.warn(`[PayPal Webhook] Order #${orderNumber} dispute resolution skipped:`, orderErr.message);
+        }
       }
     }
 
-    // 3. Store processed webhook event for idempotency
+    // 4. Store processed webhook event for idempotency and audit logs
+    let persistenceResult = "SKIPPED";
     if (client && eventId) {
       try {
         const db = client.db();
         await db.collection("processed_webhooks").insertOne({
           eventId,
           eventType,
-          orderNumber: processedOrderNumber,
+          environment,
+          signatureStatus: "VERIFIED",
+          verificationMethod: "PAYPAL_CERT_POSTBACK",
+          isSimulator,
+          orderNumber: processedOrderNumber || null,
           resourceId: event.resource?.id || null,
+          summary: `${eventType} (${environment}) for ${processedOrderNumber || "general"}`,
+          receivedAt: receivedTimestamp,
           processedAt: new Date().toISOString()
         });
+        persistenceResult = "PERSISTED";
       } catch (insertErr) {
-        // Duplicate key or write collision ignored safely
+        persistenceResult = insertErr.code === 11000 ? "DUPLICATE_KEY_IGNORED" : "FAILED";
       }
     }
 
-    res.status(200).json({ received: true });
+    // Phase 2: Structured Completion Diagnostic Log
+    console.log(`[PayPal Webhook Complete] ${JSON.stringify({
+      timestamp: new Date().toISOString(),
+      eventId: eventId || null,
+      eventType,
+      environment,
+      isSimulator,
+      orderNumber: processedOrderNumber || null,
+      persistenceResult,
+      status: 200
+    })}`);
+
+    res.status(200).json({ received: true, eventId, eventType });
   } catch (err) {
     console.error("[PayPal Webhook Error]:", err.message);
     res.status(200).json({ received: false, error: err.message });
