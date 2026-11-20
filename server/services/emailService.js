@@ -244,28 +244,35 @@ support@drmedex.com | https://drmedex.com`;
   async _dispatchEmail({ to, from, subject, text, html, metadata = {} }) {
     const cleanTo = to.trim().toLowerCase();
 
-    // 1. In test mode or when no transport configured, capture into testMailbox
-    if (process.env.NODE_ENV === "test" || !this.isConfigured()) {
+    // 1. In test mode, staging, sandbox, or when no transport configured, capture into testMailbox
+    const activeDb = (process.env.MONGODB_DB || "drmedex").trim().replace(/^["']|["']$/g, "");
+    const isIsolatedStaging = process.env.NODE_ENV === "test" ||
+                              process.env.PAYPAL_MODE === "sandbox" ||
+                              process.env.APP_ENV === "staging" ||
+                              activeDb.includes("test");
+
+    if (isIsolatedStaging || !this.isConfigured()) {
       const emailRecord = {
         to: cleanTo,
         from,
         subject,
         text,
         html,
-        metadata,
+        metadata: { ...metadata, simulated: true, environment: process.env.PAYPAL_MODE || "sandbox" },
         timestamp: new Date().toISOString()
       };
       this.testMailbox.unshift(emailRecord);
       if (this.testMailbox.length > 50) this.testMailbox.pop();
 
-      if (!this.isConfigured()) {
+      if (isIsolatedStaging || !this.isConfigured()) {
         return {
           success: true, // Marked successful in development/test simulation mode
           delivered: false,
           simulated: true,
           recipient: cleanTo,
-          error: "NO_EMAIL_TRANSPORT_CONFIGURED",
-          message: "Email queued in test simulation mailbox (no live SMTP configured)."
+          message: isIsolatedStaging
+            ? "Staging/Sandbox active; email captured in testMailbox without live SMTP delivery."
+            : "Email queued in test simulation mailbox (no live SMTP configured)."
         };
       }
     }
@@ -360,6 +367,14 @@ support@drmedex.com | https://drmedex.com`;
       throw new Error("Valid order required to generate invoice HTML.");
     }
 
+    const activeDb = (process.env.MONGODB_DB || "drmedex").trim().replace(/^["']|["']$/g, "");
+    const isSandbox = order.payment?.mode === "sandbox" ||
+                      process.env.PAYPAL_MODE === "sandbox" ||
+                      process.env.APP_ENV === "staging" ||
+                      activeDb.includes("test") ||
+                      Boolean(order.isTest) ||
+                      (order.orderNumber && (order.orderNumber.startsWith("TEST-") || order.orderNumber.startsWith("SANDBOX-")));
+
     const customerName = order.customer?.fullName || `${order.customer?.firstName || ""} ${order.customer?.lastName || ""}`.trim() || "Valued Customer";
     const invoiceNumber = `INV-${order.orderNumber}`;
     const orderDate = order.createdAt ? new Date(order.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : new Date().toLocaleDateString();
@@ -367,7 +382,7 @@ support@drmedex.com | https://drmedex.com`;
     const isPaid = order.payment?.status === "PAID";
     const isCod = order.payment?.method === "Cash on Delivery" || order.payment?.provider === "COD";
     const paymentStatusBadge = isPaid
-      ? "CONFIRMED PAID"
+      ? (isSandbox ? "CONFIRMED PAID (TEST/SANDBOX)" : "CONFIRMED PAID")
       : (isCod ? "PAYMENT DUE (CASH ON DELIVERY)" : "PAYMENT PENDING");
 
     const currency = order.pricing?.displayCurrency || order.pricing?.currency || "USD";
@@ -427,8 +442,9 @@ support@drmedex.com | https://drmedex.com`;
   <div class="print-bar">
     <button class="print-btn" onclick="window.print()">Print / Download PDF</button>
   </div>
-  <div class="container">
-    <div class="header">
+  <div class="container" style="position: relative; overflow: hidden;">
+    ${isSandbox ? '<div style="position: absolute; top: 38%; left: 8%; transform: rotate(-30deg); font-size: 52px; font-weight: 900; color: rgba(220, 38, 38, 0.12); pointer-events: none; border: 4px dashed rgba(220, 38, 38, 0.22); padding: 12px 30px; border-radius: 12px; letter-spacing: 4px; z-index: 10;">TEST / SANDBOX</div>' : ''}
+    <div class="header" ${isSandbox ? 'style="background: #3B5249;"' : ''}>
       <table class="header-table">
         <tr>
           <td>
@@ -436,7 +452,8 @@ support@drmedex.com | https://drmedex.com`;
             <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.85;">High-Precision Biomedical Verification</div>
           </td>
           <td style="text-align: right;">
-            <div style="font-size: 16px; font-weight: 800;">TAX INVOICE</div>
+            <div style="font-size: 16px; font-weight: 800; ${isSandbox ? "color: #FFAAAA;" : ""}">${isSandbox ? "TEST / SANDBOX INVOICE" : "TAX INVOICE"}</div>
+            ${isSandbox ? '<div style="font-size: 10px; color: #FFCCCC; font-weight: 700; letter-spacing: 1px; margin-top: 2px;">NOT A TAX INVOICE — FOR TESTING ONLY</div>' : ''}
             <div style="font-size: 12px; opacity: 0.9; font-family: monospace;">${escapeHtml(invoiceNumber)}</div>
           </td>
         </tr>

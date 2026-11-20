@@ -18,6 +18,7 @@ const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
+process.env.NODE_ENV = "test";
 require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
 
 const app = require("../index");

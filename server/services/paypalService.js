@@ -13,6 +13,10 @@ function stripQuotes(val) {
 }
 
 function getMode() {
+  const vercelEnv = stripQuotes(process.env.VERCEL_ENV || "").toLowerCase();
+  if (vercelEnv === "preview" || vercelEnv === "development") {
+    return "sandbox";
+  }
   const raw = stripQuotes(process.env.PAYPAL_MODE || "sandbox").toLowerCase();
   return raw || "sandbox";
 }

@@ -21,7 +21,7 @@ async function ensureIndexes() {
   if (indexesEnsured) return;
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     await db.collection(ORDERS_COLLECTION).createIndex({ orderNumber: 1 }, { unique: true });
     await db.collection(ORDERS_COLLECTION).createIndex({ customerId: 1 });
     await db.collection(ORDERS_COLLECTION).createIndex({ "customer.email": 1 });
@@ -261,7 +261,7 @@ async function createPendingOrder(payload) {
   // Persist to MongoDB
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     await db.collection(ORDERS_COLLECTION).updateOne(
       { orderNumber },
       { $set: orderRecord },
@@ -295,7 +295,7 @@ async function markOrderAsPaid({ orderNumber, paypalOrderId, paypalCaptureId, pa
   // 1. Try fetching from MongoDB first
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     order = await db.collection(ORDERS_COLLECTION).findOne({ orderNumber });
   } catch (err) {
     console.warn("[OrderService] MongoDB lookup failed:", err.message);
@@ -313,6 +313,13 @@ async function markOrderAsPaid({ orderNumber, paypalOrderId, paypalCaptureId, pa
   // Idempotency: If already paid, return safely without double deduction or double notification
   if (order.payment && order.payment.status === "PAID") {
     return order;
+  }
+
+  const activeDbName = (process.env.MONGODB_DB || "drmedex").trim().replace(/^["']|["']$/g, "");
+  const isSandboxMode = process.env.PAYPAL_MODE === "sandbox" || order.payment?.mode === "sandbox" || activeDbName.includes("test");
+  if (isSandboxMode) {
+    order.isTest = true;
+    if (order.payment) order.payment.mode = "sandbox";
   }
 
   // 2. Update order status and payment record
@@ -348,7 +355,11 @@ async function markOrderAsPaid({ orderNumber, paypalOrderId, paypalCaptureId, pa
   }
 
   // 3. Atomically deduct inventory for each purchased item (both store and MongoDB Atlas)
-  if (Array.isArray(order.items) && !order.stockDeducted) {
+  // Safety Guard: Sandbox payments MUST NEVER deduct real production stock from live database
+  if (process.env.NODE_ENV === "production" && isSandboxMode && activeDbName === "drmedex") {
+    console.warn(`[OrderService] Safety Guard: Skipped production inventory deduction for Sandbox order #${orderNumber}.`);
+    order.stockDeducted = false;
+  } else if (Array.isArray(order.items) && !order.stockDeducted) {
     for (const it of order.items) {
       const prod = store.getProductById(it.productId, false);
       const qty = parseInt(it.quantity, 10) || 1;
@@ -364,7 +375,7 @@ async function markOrderAsPaid({ orderNumber, paypalOrderId, paypalCaptureId, pa
       try {
         const client = await getClient();
         if (client) {
-          const db = client.db();
+          const db = client.db(process.env.MONGODB_DB || "drmedex");
           const updateRes = await db.collection("approved_products").updateOne(
             { id: it.productId, stock: { $gte: qty } },
             { $inc: { stock: -qty, stockQuantity: -qty }, $set: { updatedAt: now } }
@@ -392,7 +403,7 @@ async function markOrderAsPaid({ orderNumber, paypalOrderId, paypalCaptureId, pa
   // 5. Persist to MongoDB
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     await db.collection(ORDERS_COLLECTION).updateOne(
       { orderNumber },
       { $set: order },
@@ -444,7 +455,7 @@ async function attachPayPalOrderId(orderNumber, paypalOrderId) {
   const now = new Date().toISOString();
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     await db.collection(ORDERS_COLLECTION).updateOne(
       { orderNumber },
       {
@@ -471,7 +482,7 @@ async function markOrderAsFailed(orderNumber, reason = "Payment cancelled or fai
   const now = new Date().toISOString();
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     await db.collection(ORDERS_COLLECTION).updateOne(
       { orderNumber, "payment.status": { $ne: "PAID" } },
       {
@@ -505,7 +516,7 @@ async function markOrderAsCancelled(orderNumber, reason = "Payment cancelled by 
   const now = new Date().toISOString();
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     await db.collection(ORDERS_COLLECTION).updateOne(
       { orderNumber, "payment.status": { $ne: "PAID" } },
       {
@@ -541,7 +552,7 @@ async function markOrderAsPendingReview(orderNumber, { paypalOrderId, paypalCapt
   const pendingReason = reason || "PayPal payment pending settlement";
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     await db.collection(ORDERS_COLLECTION).updateOne(
       { orderNumber, "payment.status": { $ne: "PAID" } },
       {
@@ -615,7 +626,7 @@ async function markOrderAsRefunded(orderNumber, { refundId, amount, currency, re
 
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     await db.collection(ORDERS_COLLECTION).updateOne(
       { orderNumber },
       { $set: updateFields }
@@ -661,7 +672,7 @@ async function recordRefundAdmin(orderNumber, { refundId, amount, currency, reas
 
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     await db.collection(ORDERS_COLLECTION).updateOne(
       { orderNumber },
       { $set: { auditLogs: updatedOrder.auditLogs, updatedAt: now } }
@@ -679,7 +690,7 @@ async function markOrderAsReversed(orderNumber, { reversalId, reason, details } 
   const now = new Date().toISOString();
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     await db.collection(ORDERS_COLLECTION).updateOne(
       { orderNumber },
       {
@@ -715,7 +726,7 @@ async function markOrderAsDisputed(orderNumber, { disputeId, reason, amount, det
   const now = new Date().toISOString();
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     await db.collection(ORDERS_COLLECTION).updateOne(
       { orderNumber },
       {
@@ -752,7 +763,7 @@ async function markOrderDisputeResolved(orderNumber, { disputeId, outcome, detai
   const now = new Date().toISOString();
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     await db.collection(ORDERS_COLLECTION).updateOne(
       { orderNumber },
       {
@@ -785,7 +796,7 @@ async function getCustomerOrders(customerId, email) {
 
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     const query = { $or: [] };
     if (customerId) query.$or.push({ customerId: String(customerId) });
     if (email) query.$or.push({ "customer.email": new RegExp(`^${email.trim()}$`, "i") });
@@ -817,7 +828,7 @@ async function getOrder(orderId) {
 
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     const doc = await db.collection(ORDERS_COLLECTION).findOne({
       $or: [
         { orderNumber: clean },
@@ -838,7 +849,7 @@ async function getCustomerAddresses(userId) {
   if (!userId) return [];
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     const doc = await db.collection(ADDRESSES_COLLECTION).findOne({ userId: String(userId) });
     return doc?.addresses || [];
   } catch (err) {
@@ -851,7 +862,7 @@ async function saveCustomerAddress(userId, addressData) {
   if (!userId || !addressData) throw new Error("userId and addressData required.");
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     const col = db.collection(ADDRESSES_COLLECTION);
 
     const doc = await col.findOne({ userId: String(userId) });
@@ -915,7 +926,7 @@ async function deleteCustomerAddress(userId, addressId) {
   if (!userId || !addressId) return [];
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     const col = db.collection(ADDRESSES_COLLECTION);
 
     const doc = await col.findOne({ userId: String(userId) });
@@ -943,7 +954,7 @@ async function getAllOrdersAdmin({ search = "", status = "", paymentStatus = "",
 
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     const query = {};
 
     if (!includeArchived) {
@@ -1064,7 +1075,7 @@ async function updateOrderStatusAdmin(orderNumber, newStatus, adminUser = "Admin
   // Persist to MongoDB
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     await db.collection(ORDERS_COLLECTION).updateOne(
       { orderNumber: order.orderNumber },
       { $set: order },
@@ -1115,7 +1126,7 @@ async function updatePaymentStatusAdmin(orderNumber, newPaymentStatus, adminUser
   // Persist to MongoDB
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     await db.collection(ORDERS_COLLECTION).updateOne(
       { orderNumber: order.orderNumber },
       { $set: order },
@@ -1150,7 +1161,7 @@ async function softDeleteOrderAdmin(orderNumber, adminUser = "Admin") {
 
   try {
     const client = await getClient();
-    const db = client.db();
+    const db = client.db(process.env.MONGODB_DB || "drmedex");
     await db.collection(ORDERS_COLLECTION).updateOne(
       { orderNumber: order.orderNumber },
       { $set: { isArchived: true, archivedAt: now, archivedBy: adminUser } }

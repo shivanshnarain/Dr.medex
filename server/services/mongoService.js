@@ -102,22 +102,31 @@ function getCachedProductsSnapshot() {
 }
 
 function getNormalizedUri() {
-  const currentDb = (process.env.MONGODB_DB || "drmedex").trim().replace(/^["']|["']$/g, "");
+  const vercelEnv = String(process.env.VERCEL_ENV || "").trim().toLowerCase();
+  const defaultDb = (vercelEnv === "preview" || vercelEnv === "development") ? "drmedex_test" : "drmedex";
+  const currentDb = (process.env.MONGODB_DB || defaultDb).trim().replace(/^["']|["']$/g, "");
   let raw = (process.env.MONGODB_URI || "").trim().replace(/^["']|["']$/g, "");
   if (!raw) {
     raw = "mongodb+srv://roshanofficial0009_db_user:ExUyOvI6KQ5NNJOq@cluster0.7y0dbdy.mongodb.net/?appName=Cluster0";
   }
-  if ((raw.startsWith("mongodb+srv://") || raw.startsWith("mongodb://")) && !raw.includes(`/${currentDb}`)) {
-    if (raw.includes("/?")) {
-      raw = raw.replace("/?", `/${currentDb}?`);
-    } else if (raw.endsWith("/")) {
-      raw = `${raw}${currentDb}`;
-    } else if (!raw.split("?")[0].split("/")[3]) {
-      const [base, query] = raw.split("?");
-      raw = `${base}/${currentDb}${query ? `?${query}` : ""}`;
+  try {
+    const u = new URL(raw);
+    u.pathname = `/${currentDb}`;
+    return u.toString();
+  } catch (e) {
+    const [base, query] = raw.split("?");
+    const parts = base.split("/");
+    if (parts.length >= 4) {
+      parts[3] = currentDb;
+      return `${parts.join("/")}${query ? `?${query}` : ""}`;
     }
+    return `${base.replace(/\/+$/, "")}/${currentDb}${query ? `?${query}` : ""}`;
   }
-  return raw;
+}
+
+function getDatabase(customName) {
+  const target = (customName || process.env.MONGODB_DB || "drmedex").trim().replace(/^["']|["']$/g, "");
+  return global._mongoClient ? global._mongoClient.db(target) : null;
 }
 
 let indexesEnsured = false;
@@ -1046,6 +1055,7 @@ module.exports = {
   getDeletedProductIds,
   buildProductFilter,
   getClient,
+  getDatabase,
   invalidateMongoCache,
   invalidateTaxonomyCache,
   patchCachedProduct,

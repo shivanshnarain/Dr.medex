@@ -758,7 +758,7 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
     try {
       client = await mongoService.getClient();
       if (client && eventId) {
-        const db = client.db();
+        const db = client.db(process.env.MONGODB_DB || "drmedex");
         const existingEvent = await db.collection("processed_webhooks").findOne({ eventId });
         if (existingEvent) {
           console.log(`[PayPal Webhook Diagnostic] Duplicate event deduplicated: ${eventId} (already processed at ${existingEvent.processedAt || existingEvent.receivedAt})`);
@@ -788,7 +788,7 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
             existing.payment.paypalOrderId = paypalOrderId || existing.payment.paypalOrderId;
             existing.updatedAt = now;
             if (client) {
-              const db = client.db();
+              const db = client.db(process.env.MONGODB_DB || "drmedex");
               await db.collection("orders").updateOne(
                 { orderNumber },
                 { $set: { "payment.status": "APPROVED", updatedAt: now } }
@@ -957,7 +957,7 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
     let persistenceResult = "SKIPPED";
     if (client && eventId) {
       try {
-        const db = client.db();
+        const db = client.db(process.env.MONGODB_DB || "drmedex");
         await db.collection("processed_webhooks").insertOne({
           eventId,
           eventType,
@@ -1030,7 +1030,7 @@ router.post("/payment/cod/create-order", async (req, res) => {
     // Update in MongoDB
     try {
       const client = await mongoService.getClient();
-      const db = client.db();
+      const db = client.db(process.env.MONGODB_DB || "drmedex");
       await db.collection("orders").updateOne(
         { orderNumber: order.orderNumber },
         { $set: order },
