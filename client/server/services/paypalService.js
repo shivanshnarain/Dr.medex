@@ -83,7 +83,8 @@ function getWebhookId(explicitMode) {
   if (mode === "sandbox") {
     return stripQuotes(
       process.env.PAYPAL_SANDBOX_WEBHOOK_ID ||
-      "05948271A6295011K"
+      process.env.PAYPAL_WEBHOOK_ID_SANDBOX ||
+      "8AH055719G2410833"
     );
   }
   return stripQuotes(
@@ -610,29 +611,47 @@ async function verifyWebhookSignature({
   const targetMode = isSandboxCert ? "sandbox" : getMode();
   const token = await getAccessToken(targetMode);
   const baseUrl = targetMode === "sandbox" ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
-  const targetWebhookId = isSandboxCert
-    ? getWebhookId("sandbox")
-    : (webhookId || getWebhookId("live"));
+  const candidateIds = isSandboxCert
+    ? Array.from(new Set([
+        webhookId,
+        getWebhookId("sandbox"),
+        "8AH055719G2410833",
+        "05948271A6295011K"
+      ].filter(Boolean)))
+    : Array.from(new Set([
+        webhookId,
+        getWebhookId("live"),
+        "7M1853351M9950810"
+      ].filter(Boolean)));
 
-  const res = await fetch(`${baseUrl}/v1/notifications/verify-webhook-signature`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      transmission_id: transmissionId,
-      transmission_time: transmissionTime,
-      cert_url: certUrl,
-      auth_algo: authAlgo,
-      transmission_sig: transmissionSig,
-      webhook_id: targetWebhookId,
-      webhook_event: webhookEvent
-    })
-  });
+  for (const candidateId of candidateIds) {
+    try {
+      const res = await fetch(`${baseUrl}/v1/notifications/verify-webhook-signature`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          transmission_id: transmissionId,
+          transmission_time: transmissionTime,
+          cert_url: certUrl,
+          auth_algo: authAlgo,
+          transmission_sig: transmissionSig,
+          webhook_id: candidateId,
+          webhook_event: webhookEvent
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data && data.verification_status === "SUCCESS") {
+        return true;
+      }
+    } catch (fetchErr) {
+      console.warn(`[PayPal Webhook] Signature verification attempt failed for webhook ID ${candidateId}:`, fetchErr.message);
+    }
+  }
 
-  const data = await res.json().catch(() => ({}));
-  return Boolean(data && data.verification_status === "SUCCESS");
+  return false;
 }
 
 module.exports = {
