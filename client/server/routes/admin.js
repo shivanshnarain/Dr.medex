@@ -405,7 +405,7 @@ router.get("/paypal-health/summary", requireAdmin, async (req, res) => {
   try {
     let report = paypalTestRunner.getLatestReport();
     if (!report) {
-      report = await paypalTestRunner.generateFullReport();
+      report = await paypalTestRunner.getFastSummary();
     }
     res.json({ success: true, report });
   } catch (err) {

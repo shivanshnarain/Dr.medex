@@ -17,8 +17,8 @@ function getMode() {
   return raw || "sandbox";
 }
 
-function getClientId() {
-  const mode = getMode();
+function getClientId(explicitMode) {
+  const mode = explicitMode || getMode();
   if (mode === "live") {
     return stripQuotes(
       process.env.PAYPAL_LIVE_CLIENT_ID ||
@@ -39,8 +39,8 @@ function getClientId() {
   );
 }
 
-function getClientSecret() {
-  const mode = getMode();
+function getClientSecret(explicitMode) {
+  const mode = explicitMode || getMode();
   if (mode === "live") {
     return stripQuotes(
       process.env.PAYPAL_LIVE_CLIENT_SECRET ||
@@ -71,11 +71,18 @@ function getDeploymentEnv() {
   return "development";
 }
 
-function getWebhookId() {
+function getWebhookId(explicitMode) {
+  const mode = explicitMode || getMode();
+  if (mode === "sandbox") {
+    return stripQuotes(
+      process.env.PAYPAL_SANDBOX_WEBHOOK_ID ||
+      "05948271A6295011K"
+    );
+  }
   return stripQuotes(
-    process.env.PAYPAL_WEBHOOK_ID ||
     process.env.PAYPAL_LIVE_WEBHOOK_ID ||
-    (getMode() === "live" ? "7M1853351M9950810" : "")
+    process.env.PAYPAL_WEBHOOK_ID ||
+    "7M1853351M9950810"
   );
 }
 
@@ -178,35 +185,34 @@ function getPublicConfig() {
   };
 }
 
-// In-memory token cache to minimize OAuth round-trips
-let cachedToken = null;
-let tokenExpiresAt = 0;
-let cachedCredentialsHash = "";
+// In-memory token cache to minimize OAuth round-trips (keyed by credentials & mode)
+const tokenCache = new Map();
 
 function clearTokenCache() {
-  cachedToken = null;
-  tokenExpiresAt = 0;
-  cachedCredentialsHash = "";
+  tokenCache.clear();
 }
 
 /**
  * Obtain or refresh OAuth 2.0 access token from PayPal
  */
-async function getAccessToken() {
-  assertEnvironmentSafety();
+async function getAccessToken(explicitMode) {
+  const currentMode = explicitMode || getMode();
+  if (!explicitMode) {
+    assertEnvironmentSafety();
+  }
 
-  const currentClientId = getClientId();
-  const currentClientSecret = getClientSecret();
-  const currentMode = getMode();
-  const baseUrl = getBaseUrl();
+  const currentClientId = getClientId(currentMode);
+  const currentClientSecret = getClientSecret(currentMode);
+  const baseUrl = currentMode === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
 
   if (!currentClientId || !currentClientSecret) {
-    throw new Error("PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET is missing from server environment.");
+    throw new Error(`PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET is missing from server environment for mode: ${currentMode}.`);
   }
 
   const credsHash = `${currentClientId}:${currentClientSecret}:${currentMode}`;
-  if (cachedToken && credsHash === cachedCredentialsHash && Date.now() < tokenExpiresAt - 60000) {
-    return cachedToken;
+  const cached = tokenCache.get(credsHash);
+  if (cached && Date.now() < cached.expiresAt - 60000) {
+    return cached.token;
   }
 
   const auth = Buffer.from(`${currentClientId}:${currentClientSecret}`).toString("base64");
@@ -238,10 +244,12 @@ async function getAccessToken() {
   if (!data || !data.access_token) {
     throw new Error("PayPal OAuth response did not include an access_token.");
   }
-  cachedToken = data.access_token;
-  cachedCredentialsHash = credsHash;
-  tokenExpiresAt = Date.now() + (data.expires_in || 3600) * 1000;
-  return cachedToken;
+  const token = data.access_token;
+  tokenCache.set(credsHash, {
+    token,
+    expiresAt: Date.now() + (data.expires_in || 3600) * 1000
+  });
+  return token;
 }
 
 /**
@@ -543,6 +551,7 @@ async function getRefundDetails(refundId) {
 
 /**
  * Verify Webhook Event Signature
+ * Automatically validates both Live and Sandbox webhook signatures against their authoritative PayPal endpoint.
  */
 async function verifyWebhookSignature({
   webhookId,
@@ -557,8 +566,13 @@ async function verifyWebhookSignature({
     return true;
   }
 
-  const token = await getAccessToken();
-  const baseUrl = getBaseUrl();
+  const isSandboxCert = Boolean(certUrl && certUrl.includes("sandbox.paypal.com"));
+  const targetMode = isSandboxCert ? "sandbox" : getMode();
+  const token = await getAccessToken(targetMode);
+  const baseUrl = targetMode === "sandbox" ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
+  const targetWebhookId = isSandboxCert
+    ? getWebhookId("sandbox")
+    : (webhookId || getWebhookId("live"));
 
   const res = await fetch(`${baseUrl}/v1/notifications/verify-webhook-signature`, {
     method: "POST",
@@ -572,13 +586,13 @@ async function verifyWebhookSignature({
       cert_url: certUrl,
       auth_algo: authAlgo,
       transmission_sig: transmissionSig,
-      webhook_id: webhookId,
+      webhook_id: targetWebhookId,
       webhook_event: webhookEvent
     })
   });
 
-  const data = await res.json();
-  return data && data.verification_status === "SUCCESS";
+  const data = await res.json().catch(() => ({}));
+  return Boolean(data && data.verification_status === "SUCCESS");
 }
 
 module.exports = {
