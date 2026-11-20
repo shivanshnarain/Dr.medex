@@ -681,7 +681,7 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
 
     // 1. Signature Verification
     // If PAYPAL_WEBHOOK_ID is configured, verify official PayPal cryptographic signature
-    const webhookId = (process.env.PAYPAL_WEBHOOK_ID || "").trim();
+    const webhookId = (process.env.PAYPAL_WEBHOOK_ID || paypalService.getWebhookId() || "").trim();
     if (webhookId) {
       const verified = await paypalService.verifyWebhookSignature({
         webhookId,
@@ -717,7 +717,7 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
     let processedOrderNumber = null;
 
     if (eventType === "CHECKOUT.ORDER.APPROVED") {
-      // Automatic capture if checkout order was approved on PayPal but client disconnect occurred
+      // Record buyer approval without executing duplicate capture (capture is handled by frontend callback or capture event)
       const resource = event.resource;
       const paypalOrderId = resource?.id;
       const purchaseUnit = resource?.purchase_units?.[0];
@@ -727,22 +727,30 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
       if (paypalOrderId && orderNumber) {
         try {
           const existing = await orderService.getOrder(orderNumber).catch(() => null);
-          if (existing && existing.payment?.status !== "PAID") {
-            const captureData = await paypalService.captureOrder(paypalOrderId);
-            const capObj = captureData?.purchase_units?.[0]?.payments?.captures?.[0];
-            const capId = capObj?.id || paypalOrderId;
-            if (capObj?.status === "COMPLETED" || captureData?.status === "COMPLETED") {
-              await orderService.markOrderAsPaid({
-                orderNumber,
-                paypalOrderId,
-                paypalCaptureId: capId,
-                paymentDetails: captureData
-              });
+          if (existing && existing.payment?.status === "PENDING") {
+            const now = new Date().toISOString();
+            existing.payment.status = "APPROVED";
+            existing.payment.paypalOrderId = paypalOrderId || existing.payment.paypalOrderId;
+            existing.updatedAt = now;
+            if (client) {
+              const db = client.db();
+              await db.collection("orders").updateOne(
+                { orderNumber },
+                { $set: { "payment.status": "APPROVED", updatedAt: now } }
+              );
             }
           }
-        } catch (capErr) {
-          console.warn("[PayPal Webhook] Auto-capture on CHECKOUT.ORDER.APPROVED notice:", capErr.message);
+        } catch (appErr) {
+          console.warn("[PayPal Webhook] Error recording CHECKOUT.ORDER.APPROVED:", appErr.message);
         }
+      }
+    } else if (eventType === "CHECKOUT.PAYMENT-APPROVAL.REVERSED") {
+      const resource = event.resource;
+      const purchaseUnit = resource?.purchase_units?.[0];
+      const orderNumber = purchaseUnit?.custom_id || purchaseUnit?.reference_id || resource?.id;
+      processedOrderNumber = orderNumber;
+      if (orderNumber) {
+        await orderService.markOrderAsCancelled(orderNumber, "PayPal checkout approval reversed by buyer or PayPal");
       }
     } else if (eventType === "PAYMENT.CAPTURE.COMPLETED") {
       const resource = event.resource;
@@ -808,7 +816,7 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
           details: resource
         });
       }
-    } else if (eventType === "CUSTOMER.DISPUTE.CREATED") {
+    } else if (eventType === "CUSTOMER.DISPUTE.CREATED" || eventType === "CUSTOMER.DISPUTE.UPDATED") {
       const resource = event.resource;
       const disputeId = resource?.dispute_id;
       const disputeReason = resource?.reason || resource?.dispute_reason || "Customer dispute opened";
@@ -860,6 +868,22 @@ router.post(["/payment/paypal/webhook", "/paypal/webhook"], async (req, res) => 
   } catch (err) {
     console.error("[PayPal Webhook Error]:", err.message);
     res.status(200).json({ received: false, error: err.message });
+  }
+});
+
+// ORDER TAX INVOICE DOCUMENT (HTML / PDF PRINTABLE)
+router.get(["/orders/:id/invoice", "/payment/orders/:id/invoice"], async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const order = await orderService.getOrder(orderId);
+    if (!order) {
+      return res.status(404).send("<h1 style='font-family:sans-serif;text-align:center;margin-top:50px;'>Order Not Found</h1>");
+    }
+    const html = emailService.generateInvoiceHtml(order);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(html);
+  } catch (err) {
+    res.status(500).send(`<h1 style='font-family:sans-serif;text-align:center;margin-top:50px;'>Error Generating Invoice: ${err.message}</h1>`);
   }
 });
 

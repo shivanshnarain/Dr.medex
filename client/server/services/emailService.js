@@ -353,6 +353,169 @@ support@drmedex.com | https://drmedex.com`;
   }
 
   /**
+   * Generate Branded HTML Tax Invoice Document
+   */
+  generateInvoiceHtml(order) {
+    if (!order || !order.orderNumber) {
+      throw new Error("Valid order required to generate invoice HTML.");
+    }
+
+    const customerName = order.customer?.fullName || `${order.customer?.firstName || ""} ${order.customer?.lastName || ""}`.trim() || "Valued Customer";
+    const invoiceNumber = `INV-${order.orderNumber}`;
+    const orderDate = order.createdAt ? new Date(order.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : new Date().toLocaleDateString();
+
+    const isPaid = order.payment?.status === "PAID";
+    const isCod = order.payment?.method === "Cash on Delivery" || order.payment?.provider === "COD";
+    const paymentStatusBadge = isPaid
+      ? "CONFIRMED PAID"
+      : (isCod ? "PAYMENT DUE (CASH ON DELIVERY)" : "PAYMENT PENDING");
+
+    const currency = order.pricing?.displayCurrency || order.pricing?.currency || "USD";
+    const grandTotal = Number(order.pricing?.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const subtotal = Number(order.pricing?.subtotal || order.pricing?.baseSubtotalINR || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const shipping = Number(order.pricing?.shipping || order.pricing?.shippingINR || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const discount = Number(order.pricing?.discount || order.pricing?.discountINR || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const addr = order.shippingAddress || {};
+    const formattedAddress = [
+      addr.addressLine1,
+      addr.addressLine2,
+      addr.city,
+      addr.state,
+      addr.postalCode,
+      addr.country
+    ].filter(Boolean).join(", ") || "Address on file";
+
+    let itemsHtml = "";
+    (order.items || []).forEach((it) => {
+      const itPrice = Number(it.unitPriceDisplay || it.unitPrice || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const itTotal = Number((it.unitPriceDisplay || it.unitPrice || 0) * (it.quantity || 1)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      itemsHtml += `
+      <tr>
+        <td style="padding: 12px 10px; border-bottom: 1px solid #E5E1DD;">
+          <div style="font-weight: 700; color: #111111; font-size: 13px;">${escapeHtml(it.title)}</div>
+          <div style="font-size: 11px; color: #666666; font-family: monospace;">SKU: ${escapeHtml(it.sku || "N/A")}</div>
+        </td>
+        <td style="padding: 12px 10px; border-bottom: 1px solid #E5E1DD; text-align: center; font-size: 13px; font-weight: 700;">${it.quantity || 1}</td>
+        <td style="padding: 12px 10px; border-bottom: 1px solid #E5E1DD; text-align: right; font-size: 13px; font-family: monospace;">${currency} ${itPrice}</td>
+        <td style="padding: 12px 10px; border-bottom: 1px solid #E5E1DD; text-align: right; font-size: 13px; font-weight: 700; font-family: monospace;">${currency} ${itTotal}</td>
+      </tr>`;
+    });
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DR.MEDEX Invoice - ${invoiceNumber}</title>
+  <style>
+    body { margin: 0; padding: 0; background: #FAF9F7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #111111; }
+    .container { max-width: 650px; margin: 30px auto; background: #ffffff; border-radius: 14px; border: 1px solid #E5E1DD; overflow: hidden; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); }
+    .header { background: #2D5A4A; padding: 28px 24px; color: #ffffff; }
+    .header-table { width: 100%; border-collapse: collapse; }
+    .content { padding: 32px 28px; }
+    .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; ${isPaid ? "background: #E8F5E9; color: #2E7D32;" : (isCod ? "background: #FFF8E1; color: #F57F17;" : "background: #FFEBEE; color: #C62828;")} }
+    .print-bar { background: #2D5A4A; padding: 12px 24px; text-align: right; }
+    .print-btn { background: #FFD400; color: #000000; border: none; padding: 8px 18px; border-radius: 8px; font-weight: 800; font-size: 12px; cursor: pointer; }
+    @media print {
+      .print-bar { display: none !important; }
+      body { background: #ffffff; }
+      .container { border: none; box-shadow: none; margin: 0; max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="print-bar">
+    <button class="print-btn" onclick="window.print()">Print / Download PDF</button>
+  </div>
+  <div class="container">
+    <div class="header">
+      <table class="header-table">
+        <tr>
+          <td>
+            <div style="font-size: 22px; font-weight: 800; letter-spacing: 1px;">DR.MEDEX</div>
+            <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.85;">High-Precision Biomedical Verification</div>
+          </td>
+          <td style="text-align: right;">
+            <div style="font-size: 16px; font-weight: 800;">TAX INVOICE</div>
+            <div style="font-size: 12px; opacity: 0.9; font-family: monospace;">${escapeHtml(invoiceNumber)}</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="content">
+      <table style="width: 100%; margin-bottom: 24px; border-collapse: collapse;">
+        <tr>
+          <td style="vertical-align: top; width: 50%;">
+            <div style="font-size: 10px; font-weight: 700; color: #666666; text-transform: uppercase; margin-bottom: 4px;">Billed & Delivered To</div>
+            <div style="font-size: 14px; font-weight: 700; color: #111111;">${escapeHtml(customerName)}</div>
+            ${order.customer?.companyName || addr.companyName ? `<div style="font-size: 12px; color: #444444;">${escapeHtml(order.customer?.companyName || addr.companyName)}</div>` : ""}
+            <div style="font-size: 12px; color: #444444; margin-top: 4px;">${escapeHtml(formattedAddress)}</div>
+            <div style="font-size: 11px; color: #666666; margin-top: 4px;">${escapeHtml(order.customer?.email || "")} ${order.customer?.phone ? `• ${escapeHtml(order.customer.phone)}` : ""}</div>
+          </td>
+          <td style="vertical-align: top; width: 50%; text-align: right;">
+            <div style="font-size: 10px; font-weight: 700; color: #666666; text-transform: uppercase; margin-bottom: 4px;">Order Metadata</div>
+            <div style="font-size: 12px; color: #111111;">Order Ref: <strong>#${escapeHtml(order.orderNumber)}</strong></div>
+            <div style="font-size: 12px; color: #444444;">Date: ${escapeHtml(orderDate)}</div>
+            <div style="font-size: 12px; color: #444444; margin-top: 4px;">Method: <strong>${escapeHtml(order.payment?.method || order.payment?.provider || "PayPal")}</strong></div>
+            <div style="margin-top: 6px;"><span class="status-badge">${paymentStatusBadge}</span></div>
+          </td>
+        </tr>
+      </table>
+
+      <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <thead>
+          <tr style="background: #F8FAF7; border-bottom: 2px solid #2D5A4A; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #2D5A4A;">
+            <th style="padding: 10px; text-align: left;">Item Description</th>
+            <th style="padding: 10px; text-align: center;">Qty</th>
+            <th style="padding: 10px; text-align: right;">Rate</th>
+            <th style="padding: 10px; text-align: right;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHtml}
+        </tbody>
+      </table>
+
+      <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
+        <tr>
+          <td style="width: 55%; vertical-align: top; font-size: 11px; color: #666666; padding-right: 20px;">
+            <p><strong>Biomedical Equipment Compliance:</strong> All serial-numbered surgical and electrosurgical generators are factory-isolated and certified according to IEC 60601-1 biomedical standards.</p>
+          </td>
+          <td style="width: 45%;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+              <tr>
+                <td style="padding: 6px 0; color: #555555;">Subtotal</td>
+                <td style="padding: 6px 0; text-align: right; font-family: monospace; font-weight: 600;">${currency} ${subtotal}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #555555;">Air Cargo Shipping</td>
+                <td style="padding: 6px 0; text-align: right; font-family: monospace; font-weight: 600;">${currency} ${shipping}</td>
+              </tr>
+              ${Number(discount.replace(/,/g, '')) > 0 ? `
+              <tr>
+                <td style="padding: 6px 0; color: #2D5A4A;">Discount Applied</td>
+                <td style="padding: 6px 0; text-align: right; font-family: monospace; font-weight: 600; color: #2D5A4A;">-${currency} ${discount}</td>
+              </tr>` : ""}
+              <tr style="border-top: 2px solid #2D5A4A;">
+                <td style="padding: 10px 0; font-size: 15px; font-weight: 800; color: #2D5A4A;">Total</td>
+                <td style="padding: 10px 0; text-align: right; font-size: 16px; font-weight: 800; color: #2D5A4A; font-family: monospace;">${currency} ${grandTotal}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="background: #F4F7F5; padding: 18px 24px; text-align: center; font-size: 11px; color: #666666; border-top: 1px solid #E5E1DD;">
+      &copy; ${new Date().getFullYear()} DR.MEDEX Global Healthcare Technology Inc. | support@drmedex.com | sales@drmedex.com | https://drmedex.com
+    </div>
+  </div>
+</body>
+</html>`;
+  }
+
+  /**
    * Send Official DR.MEDEX Order Invoice Email
    */
   async sendOrderInvoiceEmail(order) {
@@ -437,124 +600,7 @@ Thank you for choosing DR.MEDEX Global Institutional Equipment.
 For procurement assistance, contact support@drmedex.com.
 `;
 
-    // Branded HTML Body
-    let itemsHtml = "";
-    (order.items || []).forEach((it) => {
-      const itPrice = Number(it.unitPriceDisplay || it.unitPrice || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      const itTotal = Number((it.unitPriceDisplay || it.unitPrice || 0) * (it.quantity || 1)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      itemsHtml += `
-      <tr>
-        <td style="padding: 12px 10px; border-bottom: 1px solid #E5E1DD;">
-          <div style="font-weight: 700; color: #111111; font-size: 13px;">${escapeHtml(it.title)}</div>
-          <div style="font-size: 11px; color: #666666; font-family: monospace;">SKU: ${escapeHtml(it.sku || "N/A")}</div>
-        </td>
-        <td style="padding: 12px 10px; border-bottom: 1px solid #E5E1DD; text-align: center; font-size: 13px; font-weight: 700;">${it.quantity || 1}</td>
-        <td style="padding: 12px 10px; border-bottom: 1px solid #E5E1DD; text-align: right; font-size: 13px; font-family: monospace;">${currency} ${itPrice}</td>
-        <td style="padding: 12px 10px; border-bottom: 1px solid #E5E1DD; text-align: right; font-size: 13px; font-weight: 700; font-family: monospace;">${currency} ${itTotal}</td>
-      </tr>`;
-    });
-
-    const htmlBody = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>DR.MEDEX Invoice - ${invoiceNumber}</title>
-  <style>
-    body { margin: 0; padding: 0; background: #FAF9F7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #111111; }
-    .container { max-width: 650px; margin: 30px auto; background: #ffffff; border-radius: 14px; border: 1px solid #E5E1DD; overflow: hidden; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); }
-    .header { background: #2D5A4A; padding: 28px 24px; color: #ffffff; }
-    .header-table { width: 100%; border-collapse: collapse; }
-    .content { padding: 32px 28px; }
-    .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; ${isPaid ? "background: #E8F5E9; color: #2E7D32;" : (isCod ? "background: #FFF8E1; color: #F57F17;" : "background: #FFEBEE; color: #C62828;")} }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <table class="header-table">
-        <tr>
-          <td>
-            <div style="font-size: 22px; font-weight: 800; letter-spacing: 1px;">DR.MEDEX</div>
-            <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.85;">High-Precision Biomedical Verification</div>
-          </td>
-          <td style="text-align: right;">
-            <div style="font-size: 16px; font-weight: 800;">TAX INVOICE</div>
-            <div style="font-size: 12px; opacity: 0.9; font-family: monospace;">${escapeHtml(invoiceNumber)}</div>
-          </td>
-        </tr>
-      </table>
-    </div>
-
-    <div class="content">
-      <table style="width: 100%; margin-bottom: 24px; border-collapse: collapse;">
-        <tr>
-          <td style="vertical-align: top; width: 50%;">
-            <div style="font-size: 10px; font-weight: 700; color: #666666; text-transform: uppercase; margin-bottom: 4px;">Billed & Delivered To</div>
-            <div style="font-size: 14px; font-weight: 700; color: #111111;">${escapeHtml(customerName)}</div>
-            ${order.customer?.companyName || addr.companyName ? `<div style="font-size: 12px; color: #444444;">${escapeHtml(order.customer?.companyName || addr.companyName)}</div>` : ""}
-            <div style="font-size: 12px; color: #444444; margin-top: 4px;">${escapeHtml(formattedAddress)}</div>
-            <div style="font-size: 11px; color: #666666; margin-top: 4px;">${escapeHtml(recipientEmail)} ${order.customer?.phone ? `• ${escapeHtml(order.customer.phone)}` : ""}</div>
-          </td>
-          <td style="vertical-align: top; width: 50%; text-align: right;">
-            <div style="font-size: 10px; font-weight: 700; color: #666666; text-transform: uppercase; margin-bottom: 4px;">Order Metadata</div>
-            <div style="font-size: 12px; color: #111111;">Order Ref: <strong>#${escapeHtml(order.orderNumber)}</strong></div>
-            <div style="font-size: 12px; color: #444444;">Date: ${escapeHtml(orderDate)}</div>
-            <div style="font-size: 12px; color: #444444; margin-top: 4px;">Method: <strong>${escapeHtml(order.payment?.method || order.payment?.provider || "PayPal")}</strong></div>
-            <div style="margin-top: 6px;"><span class="status-badge">${paymentStatusBadge}</span></div>
-          </td>
-        </tr>
-      </table>
-
-      <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-        <thead>
-          <tr style="background: #F8FAF7; border-bottom: 2px solid #2D5A4A; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #2D5A4A;">
-            <th style="padding: 10px; text-align: left;">Item Description</th>
-            <th style="padding: 10px; text-align: center;">Qty</th>
-            <th style="padding: 10px; text-align: right;">Rate</th>
-            <th style="padding: 10px; text-align: right;">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${itemsHtml}
-        </tbody>
-      </table>
-
-      <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
-        <tr>
-          <td style="width: 55%; vertical-align: top; font-size: 11px; color: #666666; padding-right: 20px;">
-            <p><strong>Biomedical Equipment Compliance:</strong> All serial-numbered surgical and electrosurgical generators are factory-isolated and certified according to IEC 60601-1 biomedical standards.</p>
-          </td>
-          <td style="width: 45%;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
-              <tr>
-                <td style="padding: 6px 0; color: #555555;">Subtotal</td>
-                <td style="padding: 6px 0; text-align: right; font-family: monospace; font-weight: 600;">${currency} ${subtotal}</td>
-              </tr>
-              <tr>
-                <td style="padding: 6px 0; color: #555555;">Air Cargo Shipping</td>
-                <td style="padding: 6px 0; text-align: right; font-family: monospace; font-weight: 600;">${currency} ${shipping}</td>
-              </tr>
-              ${Number(discount.replace(/,/g, '')) > 0 ? `
-              <tr>
-                <td style="padding: 6px 0; color: #2D5A4A;">Discount Applied</td>
-                <td style="padding: 6px 0; text-align: right; font-family: monospace; font-weight: 600; color: #2D5A4A;">-${currency} ${discount}</td>
-              </tr>` : ""}
-              <tr style="border-top: 2px solid #2D5A4A;">
-                <td style="padding: 10px 0; font-size: 15px; font-weight: 800; color: #2D5A4A;">Total</td>
-                <td style="padding: 10px 0; text-align: right; font-size: 16px; font-weight: 800; color: #2D5A4A; font-family: monospace;">${currency} ${grandTotal}</td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-    </div>
-
-    <div style="background: #F4F7F5; padding: 18px 24px; text-align: center; font-size: 11px; color: #666666; border-top: 1px solid #E5E1DD;">
-      &copy; ${new Date().getFullYear()} DR.MEDEX Global Healthcare Technology Inc. | support@drmedex.com | https://drmedex.com
-    </div>
-  </div>
-</body>
-</html>`;
+    const htmlBody = this.generateInvoiceHtml(order);
 
     return await this._dispatchEmail({
       to: recipientEmail,
@@ -567,6 +613,94 @@ For procurement assistance, contact support@drmedex.com.
         orderNumber: order.orderNumber,
         invoiceNumber
       }
+    });
+  }
+
+  /**
+   * Send Admin Notification for a New Verified Paid Order
+   */
+  async sendAdminNewPaidOrderNotification(order) {
+    if (!order || !order.orderNumber) {
+      throw new Error("Valid order required to send admin notification.");
+    }
+
+    const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || process.env.SMTP_USER || "orders@drmedex.com";
+    const orderNumber = order.orderNumber;
+    const currency = order.pricing?.displayCurrency || order.pricing?.currency || "USD";
+    const grandTotal = Number(order.pricing?.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const provider = order.payment?.provider || "PayPal";
+    const captureId = order.payment?.paypalCaptureId || order.payment?.transactionId || "N/A";
+    const customerName = order.customer?.fullName || order.shippingAddress?.fullName || "Valued Customer";
+    const customerEmail = order.customer?.email || "N/A";
+    const customerPhone = order.customer?.phone || "N/A";
+    const itemsCount = order.items?.length || 0;
+
+    const subject = `[DR.MEDEX Alert] New Paid Order #${orderNumber} (${currency} ${grandTotal} via ${provider})`;
+    const from = process.env.SMTP_FROM || "DR.MEDEX Global Invoicing <invoicing@drmedex.com>";
+
+    let textBody = `DR.MEDEX Order Management Alert:
+A new verified paid order has been completed on the storefront.
+
+Order Number: #${orderNumber}
+Payment Provider: ${provider}
+PayPal Capture ID: ${captureId}
+Amount: ${currency} ${grandTotal}
+Status: VERIFIED PAID
+
+Customer:
+Name: ${customerName}
+Email: ${customerEmail}
+Phone: ${customerPhone}
+
+Items: ${itemsCount} product(s)
+`;
+    (order.items || []).forEach((it, idx) => {
+      textBody += `${idx + 1}. ${it.title} (SKU: ${it.sku || "N/A"}, Qty: ${it.quantity})\n`;
+    });
+
+    const htmlBody = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>New Paid Order #${escapeHtml(orderNumber)}</title></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #FAF9F7; margin: 0; padding: 20px;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #E5E1DD; overflow: hidden;">
+    <div style="background: #2D5A4A; color: #ffffff; padding: 20px 24px;">
+      <h2 style="margin: 0; font-size: 18px;">DR.MEDEX — New Verified Paid Order</h2>
+      <div style="font-size: 12px; opacity: 0.8; margin-top: 4px;">Order #${escapeHtml(orderNumber)}</div>
+    </div>
+    <div style="padding: 24px;">
+      <div style="background: #F4F7F2; border-left: 4px solid #2D5A4A; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px;">
+        <strong style="color: #2D5A4A;">Payment Status: VERIFIED PAID</strong><br>
+        <span style="font-size: 12px; color: #555555;">Capture ID: <code>${escapeHtml(captureId)}</code> | Amount: <strong>${currency} ${grandTotal}</strong></span>
+      </div>
+      <h3 style="font-size: 14px; margin-bottom: 8px;">Customer Information</h3>
+      <p style="font-size: 12px; line-height: 1.6; margin: 0 0 16px 0; color: #333333;">
+        <strong>Name:</strong> ${escapeHtml(customerName)}<br>
+        <strong>Email:</strong> ${escapeHtml(customerEmail)}<br>
+        <strong>Phone:</strong> ${escapeHtml(customerPhone)}<br>
+        <strong>Shipping:</strong> ${escapeHtml(order.shippingAddress?.city || "")}, ${escapeHtml(order.shippingAddress?.country || "")}
+      </p>
+      <h3 style="font-size: 14px; margin-bottom: 8px;">Purchased Equipment (${itemsCount})</h3>
+      <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+        ${(order.items || []).map((it) => `
+          <tr style="border-bottom: 1px solid #EEEEEE;">
+            <td style="padding: 8px 4px;"><strong>${escapeHtml(it.title)}</strong><br><span style="color: #666666; font-size: 10px;">SKU: ${escapeHtml(it.sku || "N/A")}</span></td>
+            <td style="padding: 8px 4px; text-align: center;">Qty: ${it.quantity}</td>
+            <td style="padding: 8px 4px; text-align: right; font-family: monospace;">${currency} ${Number((it.unitPriceDisplay || it.unitPrice || 0) * (it.quantity || 1)).toFixed(2)}</td>
+          </tr>
+        `).join("")}
+      </table>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    return await this._dispatchEmail({
+      to: adminEmail,
+      from,
+      subject,
+      text: textBody,
+      html: htmlBody,
+      metadata: { orderNumber, type: "admin_paid_order_notification" }
     });
   }
 

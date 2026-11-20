@@ -79,12 +79,13 @@ interface OrderPricing {
   shippingINR?: number;
   grandTotalINR?: number;
   appliedCoupon?: string | null;
+  exchangeRateUsed?: number | null;
 }
 
 interface OrderPayment {
   provider: string;
   method: string;
-  status: "PENDING" | "PAID" | "FAILED" | "CANCELLED" | "REFUND_PENDING" | "PARTIALLY_REFUNDED" | "REFUNDED";
+  status: "PENDING" | "PAID" | "FAILED" | "CANCELLED" | "REFUND_PENDING" | "PARTIALLY_REFUNDED" | "REFUNDED" | "REVERSED";
   paypalOrderId?: string | null;
   paypalCaptureId?: string | null;
   transactionId?: string | null;
@@ -92,6 +93,14 @@ interface OrderPayment {
   currency?: string;
   paidAt?: string | null;
   failureReason?: string | null;
+  refundStatus?: string | null;
+  refundId?: string | null;
+  refundAmount?: number | null;
+  refundCurrency?: string | null;
+  refundReason?: string | null;
+  disputeStatus?: string | null;
+  disputeId?: string | null;
+  disputeReason?: string | null;
 }
 
 interface OrderRecord {
@@ -159,6 +168,11 @@ export const AdminOrdersPage: React.FC = () => {
   const [confirmCancelModal, setConfirmCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [confirmDeleteModal, setConfirmDeleteModal] = useState(false);
+
+  // Refund Modal State
+  const [refundModalOpen, setRefundModalOpen] = useState(false);
+  const [refundAmountInput, setRefundAmountInput] = useState("");
+  const [refundReasonInput, setRefundReasonInput] = useState("");
 
   // Shiprocket Diagnostics & Live State
   const [shiprocketStatus, setShiprocketStatus] = useState<{
@@ -289,6 +303,37 @@ export const AdminOrdersPage: React.FC = () => {
       }
     } catch (err: any) {
       setToastMessage({ type: "error", text: err.message || "Error dispatching invoice." });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Process PayPal Refund
+  const handleProcessRefund = async () => {
+    if (!selectedOrder) return;
+    setActionLoading(true);
+    try {
+      const res = await adminFetch(`/api/admin/orders/${selectedOrder.orderNumber}/refund`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: refundAmountInput ? parseFloat(refundAmountInput) : undefined,
+          reason: refundReasonInput || "Administrative customer refund"
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSelectedOrder(data.order);
+        setRefundModalOpen(false);
+        setRefundAmountInput("");
+        setRefundReasonInput("");
+        setToastMessage({ type: "success", text: data.message || `Refund processed successfully for Order #${selectedOrder.orderNumber}.` });
+        loadOrders();
+      } else {
+        setToastMessage({ type: "error", text: data.message || "Failed to process refund." });
+      }
+    } catch (err: any) {
+      setToastMessage({ type: "error", text: err.message || "Error processing refund." });
     } finally {
       setActionLoading(false);
     }
@@ -552,7 +597,9 @@ export const AdminOrdersPage: React.FC = () => {
                 <option value="PAID">Paid</option>
                 <option value="PENDING">Pending</option>
                 <option value="FAILED">Failed</option>
+                <option value="PARTIALLY_REFUNDED">Partially Refunded</option>
                 <option value="REFUNDED">Refunded</option>
+                <option value="REVERSED">Reversed</option>
                 <option value="CANCELLED">Cancelled</option>
               </select>
             </div>
@@ -815,6 +862,57 @@ export const AdminOrdersPage: React.FC = () => {
                         {selectedOrder.payment?.paypalCaptureId || "N/A"}
                       </div>
                     </div>
+
+                    <div>
+                      <span className="text-3xs text-neutral-500 uppercase font-bold">PayPal Charged Amount</span>
+                      <div className="font-mono font-bold text-[#2D5A4A]">
+                        {selectedOrder.pricing?.currency || "USD"} {Number(selectedOrder.pricing?.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-3xs text-neutral-500 uppercase font-bold">Original INR Total</span>
+                      <div className="font-mono font-bold text-neutral-800">
+                        ₹{Number(selectedOrder.pricing?.grandTotalINR || selectedOrder.pricing?.baseSubtotalINR || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-3xs text-neutral-500 uppercase font-bold">Exchange Rate Used</span>
+                      <div className="font-mono text-neutral-800">
+                        {selectedOrder.pricing?.exchangeRateUsed ? `1 INR = ${selectedOrder.pricing.exchangeRateUsed} ${selectedOrder.pricing.currency || "USD"}` : "Direct INR"}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-3xs text-neutral-500 uppercase font-bold">Payment Verified At</span>
+                      <div className="text-neutral-800">
+                        {selectedOrder.payment?.paidAt ? new Date(selectedOrder.payment.paidAt).toLocaleString() : "Not Completed"}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-3xs text-neutral-500 uppercase font-bold">Refund Status</span>
+                      <div className="font-bold text-neutral-800">
+                        {selectedOrder.payment?.refundStatus || (selectedOrder.payment?.refundAmount ? "REFUNDED" : "None")}
+                        {selectedOrder.payment?.refundAmount ? ` (${selectedOrder.pricing?.currency || "USD"} ${Number(selectedOrder.payment.refundAmount).toFixed(2)})` : ""}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-3xs text-neutral-500 uppercase font-bold">Refund ID</span>
+                      <div className="font-mono text-neutral-800 truncate" title={selectedOrder.payment?.refundId || "N/A"}>
+                        {selectedOrder.payment?.refundId || "N/A"}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-3xs text-neutral-500 uppercase font-bold">Dispute Status</span>
+                      <div className="font-bold text-neutral-800">
+                        {selectedOrder.payment?.disputeStatus || "No Active Dispute"}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-3xs text-neutral-500 uppercase font-bold">Dispute ID</span>
+                      <div className="font-mono text-neutral-800 truncate" title={selectedOrder.payment?.disputeId || "N/A"}>
+                        {selectedOrder.payment?.disputeId || "N/A"}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Permitted Manual Payment Status Update */}
@@ -968,8 +1066,33 @@ export const AdminOrdersPage: React.FC = () => {
                       className="px-3 py-2 border border-neutral-300 hover:bg-neutral-100 rounded-lg text-xs font-bold text-neutral-800 flex items-center gap-1.5 cursor-pointer"
                     >
                       <Printer size={13} />
-                      <span>Print Invoice</span>
+                      <span>Print Receipt</span>
                     </button>
+
+                    <a
+                      href={`/api/orders/${encodeURIComponent(selectedOrder.orderNumber)}/invoice`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-2 border border-neutral-300 hover:bg-neutral-100 rounded-lg text-xs font-bold text-neutral-800 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <FileText size={13} />
+                      <span>View Invoice Document</span>
+                    </a>
+
+                    {(selectedOrder.payment?.status === "PAID" || selectedOrder.payment?.status === "PARTIALLY_REFUNDED") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRefundAmountInput("");
+                          setRefundReasonInput("");
+                          setRefundModalOpen(true);
+                        }}
+                        className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        <RotateCcw size={13} />
+                        <span>Refund Payment</span>
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -1156,7 +1279,7 @@ export const AdminOrdersPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setConfirmDeleteModal(false)}
-                  className="px-4 py-2 text-xs font-bold text-neutral-700 border border-neutral-300 rounded-xl"
+                  className="px-4 py-2 text-xs font-bold text-neutral-700 border border-neutral-300 rounded-xl cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1164,9 +1287,76 @@ export const AdminOrdersPage: React.FC = () => {
                   type="button"
                   onClick={handleConfirmDelete}
                   disabled={actionLoading}
-                  className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl"
+                  className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl cursor-pointer"
                 >
                   Archive Order
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* PayPal Refund Modal Dialog */}
+        {refundModalOpen && selectedOrder && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-neutral-200 space-y-4">
+              <div className="flex items-center gap-2.5 text-amber-700">
+                <RotateCcw size={20} />
+                <h3 className="font-bold text-sm text-neutral-900">Process PayPal Refund</h3>
+              </div>
+              <p className="text-xs text-neutral-600">
+                Initiate a full or partial refund for Order #{selectedOrder.orderNumber}.
+                Total Charged: <strong>{selectedOrder.pricing?.currency || "USD"} {Number(selectedOrder.pricing?.grandTotal || 0).toFixed(2)}</strong>.
+                {Number(selectedOrder.payment?.refundAmount || 0) > 0 && (
+                  <span className="block text-amber-700 font-bold mt-1">
+                    Already refunded: {selectedOrder.pricing?.currency || "USD"} {Number(selectedOrder.payment.refundAmount).toFixed(2)}
+                  </span>
+                )}
+              </p>
+
+              <div>
+                <label className="block text-3xs font-bold uppercase text-neutral-500 mb-1">
+                  Refund Amount ({selectedOrder.pricing?.currency || "USD"}) (Leave blank for full remaining amount)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max={Math.max(0, Number(selectedOrder.pricing?.grandTotal || 0) - Number(selectedOrder.payment?.refundAmount || 0))}
+                  value={refundAmountInput}
+                  onChange={(e) => setRefundAmountInput(e.target.value)}
+                  placeholder={`Max: ${(Math.max(0, Number(selectedOrder.pricing?.grandTotal || 0) - Number(selectedOrder.payment?.refundAmount || 0))).toFixed(2)}`}
+                  className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-3xs font-bold uppercase text-neutral-500 mb-1">Refund Reason</label>
+                <input
+                  type="text"
+                  value={refundReasonInput}
+                  onChange={(e) => setRefundReasonInput(e.target.value)}
+                  placeholder="e.g. Customer returned unopened item / calibration defect"
+                  className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setRefundModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-neutral-700 border border-neutral-300 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleProcessRefund}
+                  disabled={actionLoading}
+                  className="px-4 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl flex items-center gap-1.5 cursor-pointer"
+                >
+                  {actionLoading ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
+                  <span>Confirm Refund</span>
                 </button>
               </div>
             </div>

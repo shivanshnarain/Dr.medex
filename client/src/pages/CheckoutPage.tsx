@@ -1782,17 +1782,27 @@ export const CheckoutPage: React.FC = () => {
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2.5 w-full sm:w-auto">
+              <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
                 <Link
                   to={`/track-order?orderId=${completedOrder.orderNumber}`}
-                  className="flex-1 sm:flex-none text-center px-5 py-2.5 bg-[#7AA05A] hover:bg-[#688a4c] text-white rounded-xl text-xs font-bold transition-all shadow-xs"
+                  className="flex-1 sm:flex-none text-center px-4 py-2.5 bg-[#7AA05A] hover:bg-[#688a4c] text-white rounded-xl text-xs font-bold transition-all shadow-xs"
                 >
                   Track Shipment
                 </Link>
+                <a
+                  href={`/api/orders/${encodeURIComponent(completedOrder.orderNumber)}/invoice`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3.5 py-2.5 border border-neutral-300 text-neutral-800 rounded-xl text-xs font-bold hover:bg-neutral-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  title="Download or print official DR.MEDEX tax invoice"
+                >
+                  <FileText size={15} />
+                  <span>Download Invoice</span>
+                </a>
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="px-4 py-2.5 border border-neutral-300 text-neutral-800 rounded-xl text-xs font-bold hover:bg-neutral-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="px-3.5 py-2.5 border border-neutral-300 text-neutral-800 rounded-xl text-xs font-bold hover:bg-neutral-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Printer size={15} />
                   <span>Print Receipt</span>

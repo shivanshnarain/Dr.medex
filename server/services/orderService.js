@@ -277,10 +277,8 @@ async function createPendingOrder(payload) {
   // Trigger order placed push notification asynchronously
   notificationService.sendOrderNotification(orderRecord, "placed").catch(() => {});
 
-  // Send official invoice email automatically
-  emailService.sendOrderInvoiceEmail(orderRecord).catch(err => {
-    console.warn("[OrderService] Auto-invoice dispatch warning:", err.message);
-  });
+  // Note: Official verified invoice and customer confirmation emails are dispatched
+  // strictly after verified payment capture completion in markOrderAsPaid()
 
   return orderRecord;
 }
@@ -312,7 +310,7 @@ async function markOrderAsPaid({ orderNumber, paypalOrderId, paypalCaptureId, pa
     throw new Error(`Order #${orderNumber} not found.`);
   }
 
-  // Idempotency: If already paid, return safely without double deduction
+  // Idempotency: If already paid, return safely without double deduction or double notification
   if (order.payment && order.payment.status === "PAID") {
     return order;
   }
@@ -349,22 +347,49 @@ async function markOrderAsPaid({ orderNumber, paypalOrderId, paypalCaptureId, pa
     });
   }
 
-  // 3. Atomically deduct inventory for each purchased item
-  if (Array.isArray(order.items)) {
-    order.items.forEach(it => {
+  // 3. Atomically deduct inventory for each purchased item (both store and MongoDB Atlas)
+  if (Array.isArray(order.items) && !order.stockDeducted) {
+    for (const it of order.items) {
       const prod = store.getProductById(it.productId, false);
+      const qty = parseInt(it.quantity, 10) || 1;
       if (prod) {
-        const qty = it.quantity || 1;
         const currentStock = prod.stock !== undefined ? prod.stock : (prod.stockQuantity !== undefined ? prod.stockQuantity : 100);
         prod.stock = Math.max(0, currentStock - qty);
         prod.stockQuantity = prod.stock;
         prod.stockStatus = prod.stock <= 0 ? "OUT_OF_STOCK" : (prod.stock <= (prod.lowStockThreshold || 3) ? "LOW_STOCK" : "IN_STOCK");
         prod.updatedAt = now;
       }
-    });
+
+      // Concurrency-safe atomic deduction in MongoDB collection approved_products (clamped >= 0)
+      try {
+        const client = await getClient();
+        if (client) {
+          const db = client.db();
+          const updateRes = await db.collection("approved_products").updateOne(
+            { id: it.productId, stock: { $gte: qty } },
+            { $inc: { stock: -qty, stockQuantity: -qty }, $set: { updatedAt: now } }
+          );
+          if (updateRes.matchedCount === 0) {
+            await db.collection("approved_products").updateOne(
+              { id: it.productId },
+              { $set: { stock: 0, stockQuantity: 0, stockStatus: "OUT_OF_STOCK", updatedAt: now } }
+            );
+          }
+        }
+      } catch (mongoStockErr) {
+        console.warn("[OrderService] MongoDB stock deduction warning:", mongoStockErr.message);
+      }
+    }
+    order.stockDeducted = true;
+    order.stockDeductedAt = now;
   }
 
-  // 4. Persist to MongoDB
+  // 4. Initialize notification tracking
+  if (!order.notifications) {
+    order.notifications = {};
+  }
+
+  // 5. Persist to MongoDB
   try {
     const client = await getClient();
     const db = client.db();
@@ -388,10 +413,25 @@ async function markOrderAsPaid({ orderNumber, paypalOrderId, paypalCaptureId, pa
   // Trigger payment confirmed push notification asynchronously
   notificationService.sendOrderNotification(order, "confirmed").catch(() => {});
 
-  // Send verified paid invoice email automatically
-  emailService.sendOrderInvoiceEmail(order).catch(err => {
-    console.warn("[OrderService] Paid auto-invoice dispatch warning:", err.message);
-  });
+  // Send verified customer tax invoice email automatically (exactly once)
+  if (!order.notifications.customerInvoiceSent) {
+    emailService.sendOrderInvoiceEmail(order).then(() => {
+      order.notifications.customerInvoiceSent = true;
+      order.notifications.customerInvoiceSentAt = new Date().toISOString();
+    }).catch(err => {
+      console.warn("[OrderService] Paid auto-invoice dispatch warning:", err.message);
+    });
+  }
+
+  // Send new paid order admin notification email automatically (exactly once)
+  if (!order.notifications.adminNotificationSent) {
+    emailService.sendAdminNewPaidOrderNotification(order).then(() => {
+      order.notifications.adminNotificationSent = true;
+      order.notifications.adminNotificationSentAt = new Date().toISOString();
+    }).catch(err => {
+      console.warn("[OrderService] Admin paid order notification warning:", err.message);
+    });
+  }
 
   return order;
 }
@@ -529,43 +569,105 @@ async function markOrderAsPendingReview(orderNumber, { paypalOrderId, paypalCapt
 }
 
 /**
- * Mark order as REFUNDED (or PARTIALLY_REFUNDED) via PayPal Webhook
+ * Mark order as REFUNDED or PARTIALLY_REFUNDED (via Webhook or Payment API)
  */
 async function markOrderAsRefunded(orderNumber, { refundId, amount, currency, reason, details } = {}) {
   if (!orderNumber) return null;
   const now = new Date().toISOString();
+
+  let order = await getOrder(orderNumber);
+  if (!order) return null;
+
+  const grandTotal = Number(order.pricing?.grandTotal || 0);
+  const refundNum = Number(amount || 0);
+  const cumulativeRefunded = Number(order.payment?.refundAmount || 0) + (refundNum || grandTotal);
+  const isPartial = grandTotal > 0 && cumulativeRefunded < (grandTotal - 0.01);
+  const newPaymentStatus = isPartial ? "PARTIALLY_REFUNDED" : "REFUNDED";
+  const newOrderStatus = isPartial ? (order.orderStatus || "PROCESSING") : "REFUNDED";
+
+  const refundEntry = {
+    refundId: refundId || null,
+    amount: refundNum || grandTotal,
+    currency: currency || order.pricing?.currency || "USD",
+    reason: reason || "PayPal Refund",
+    timestamp: now,
+    status: "COMPLETED",
+    details: details || null
+  };
+
+  const existingRefunds = Array.isArray(order.payment?.refunds) ? order.payment.refunds : [];
+  existingRefunds.push(refundEntry);
+
+  const updateFields = {
+    "payment.status": newPaymentStatus,
+    "payment.refundStatus": newPaymentStatus,
+    "payment.refundId": refundId || order.payment?.refundId || null,
+    "payment.refundAmount": cumulativeRefunded,
+    "payment.refundCurrency": currency || order.pricing?.currency || "USD",
+    "payment.refundReason": reason || "PayPal Refund",
+    "payment.refunds": existingRefunds,
+    "payment.refundDetails": details || null,
+    orderStatus: newOrderStatus,
+    status: newOrderStatus,
+    updatedAt: now
+  };
+
   try {
     const client = await getClient();
     const db = client.db();
     await db.collection(ORDERS_COLLECTION).updateOne(
       { orderNumber },
-      {
-        $set: {
-          "payment.status": "REFUNDED",
-          "payment.refundId": refundId || null,
-          "payment.refundAmount": amount || null,
-          "payment.refundCurrency": currency || null,
-          "payment.refundReason": reason || "PayPal Webhook Refund",
-          "payment.refundDetails": details || null,
-          orderStatus: "REFUNDED",
-          status: "REFUNDED",
-          updatedAt: now
-        }
-      }
+      { $set: updateFields }
     );
   } catch (err) {}
 
-  const order = store.getOrderById(orderNumber);
+  order = store.getOrderById(orderNumber);
   if (order && order.payment) {
-    order.payment.status = "REFUNDED";
-    order.payment.refundId = refundId || null;
-    order.payment.refundAmount = amount || null;
-    order.payment.refundCurrency = currency || null;
-    order.orderStatus = "REFUNDED";
-    order.status = "REFUNDED";
+    order.payment.status = newPaymentStatus;
+    order.payment.refundStatus = newPaymentStatus;
+    order.payment.refundId = refundId || order.payment.refundId || null;
+    order.payment.refundAmount = cumulativeRefunded;
+    order.payment.refundCurrency = currency || order.pricing?.currency || "USD";
+    order.payment.refundReason = reason || "PayPal Refund";
+    order.payment.refunds = existingRefunds;
+    order.orderStatus = newOrderStatus;
+    order.status = newOrderStatus;
     order.updatedAt = now;
   }
   return order || null;
+}
+
+/**
+ * Admin: Record processed refund with audit trail
+ */
+async function recordRefundAdmin(orderNumber, { refundId, amount, currency, reason, adminUser = "Admin", details } = {}) {
+  const updatedOrder = await markOrderAsRefunded(orderNumber, { refundId, amount, currency, reason, details });
+  if (!updatedOrder) {
+    throw new Error(`Order #${orderNumber} not found.`);
+  }
+
+  const now = new Date().toISOString();
+  if (!Array.isArray(updatedOrder.auditLogs)) updatedOrder.auditLogs = [];
+  updatedOrder.auditLogs.unshift({
+    action: "PAYMENT_REFUNDED",
+    refundId,
+    amount,
+    currency,
+    reason,
+    adminUser,
+    timestamp: now
+  });
+
+  try {
+    const client = await getClient();
+    const db = client.db();
+    await db.collection(ORDERS_COLLECTION).updateOne(
+      { orderNumber },
+      { $set: { auditLogs: updatedOrder.auditLogs, updatedAt: now } }
+    );
+  } catch (err) {}
+
+  return updatedOrder;
 }
 
 /**
@@ -1091,6 +1193,7 @@ module.exports = {
   getAllOrdersAdmin,
   updateOrderStatusAdmin,
   updatePaymentStatusAdmin,
+  recordRefundAdmin,
   cancelOrderAdmin,
   softDeleteOrderAdmin,
   resendInvoiceEmail

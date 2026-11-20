@@ -19,6 +19,8 @@ const imageResolver = require("../services/imageResolver");
 const orderService = require("../services/orderService");
 const deletionService = require("../services/deletionService");
 const shiprocketService = require("../services/shiprocketService");
+const paypalService = require("../services/paypalService");
+const emailService = require("../services/emailService");
 
 /**
  * Authentication Middleware
@@ -275,6 +277,121 @@ router.post("/orders/:id/resend-invoice", requireAdmin, async (req, res) => {
 
     res.json({ success: true, message: `Invoice for order #${orderId} has been resent.`, result });
   } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+router.get("/orders/:id/invoice", requireAdmin, async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const order = await orderService.getOrder(orderId);
+    if (!order) {
+      return res.status(404).send("<h1 style='font-family:sans-serif;text-align:center;margin-top:50px;'>Order Not Found</h1>");
+    }
+    const html = emailService.generateInvoiceHtml(order);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(html);
+  } catch (err) {
+    res.status(500).send(`<h1>Error generating invoice: ${err.message}</h1>`);
+  }
+});
+
+router.post("/orders/:id/refund", requireAdmin, async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const { amount, reason } = req.body || {};
+    const adminUser = req.admin?.email || "Admin";
+
+    const order = await orderService.getOrder(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: `Order #${orderId} not found.` });
+    }
+
+    if (!order.payment || (order.payment.status !== "PAID" && order.payment.status !== "PARTIALLY_REFUNDED")) {
+      return res.status(400).json({
+        success: false,
+        message: `Order #${orderId} cannot be refunded: current payment status is "${order.payment?.status || "PENDING"}".`
+      });
+    }
+
+    const captureId = order.payment.paypalCaptureId;
+    if (!captureId) {
+      return res.status(400).json({
+        success: false,
+        message: `Order #${orderId} does not have a valid PayPal capture ID.`
+      });
+    }
+
+    const grandTotal = Number(order.pricing?.grandTotal || 0);
+    const existingRefundAmount = Number(order.payment?.refundAmount || 0);
+    const remainingRefundable = Math.max(0, grandTotal - existingRefundAmount);
+
+    if (remainingRefundable <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Order #${orderId} is already fully refunded.`
+      });
+    }
+
+    let refundAmount = amount ? Number(amount) : null;
+    if (refundAmount !== null) {
+      if (!Number.isFinite(refundAmount) || refundAmount <= 0) {
+        return res.status(400).json({ success: false, message: "Refund amount must be greater than zero." });
+      }
+      if (refundAmount > remainingRefundable + 0.01) {
+        return res.status(400).json({
+          success: false,
+          message: `Requested refund amount (${refundAmount}) exceeds remaining refundable capacity (${remainingRefundable.toFixed(2)}).`
+        });
+      }
+    }
+
+    // Call PayPal capture refund API with idempotency key
+    const requestId = `refund-${order.orderNumber}-${Date.now()}`;
+    const refundResult = await paypalService.refundCapture({
+      captureId,
+      amount: refundAmount,
+      currency: order.pricing?.currency || "USD",
+      note: reason || `Admin refund for DR.MEDEX Order #${order.orderNumber}`,
+      requestId
+    });
+
+    const refundId = refundResult?.id || `REFUND-${Date.now()}`;
+    const actualRefundAmount = refundResult?.amount?.value ? Number(refundResult.amount.value) : (refundAmount || grandTotal);
+    const actualCurrency = refundResult?.amount?.currency_code || order.pricing?.currency || "USD";
+
+    // Record refund in order management and audit trail
+    const updatedOrder = await orderService.recordRefundAdmin(order.orderNumber, {
+      refundId,
+      amount: actualRefundAmount,
+      currency: actualCurrency,
+      reason: reason || "Administrative Refund",
+      adminUser,
+      details: refundResult
+    });
+
+    auditService.log({
+      action: "ORDER_PAYMENT_REFUND",
+      entity: "orders",
+      entityId: order.orderNumber,
+      details: {
+        refundId,
+        amount: actualRefundAmount,
+        currency: actualCurrency,
+        reason,
+        adminUser,
+        captureId
+      }
+    });
+
+    res.json({
+      success: true,
+      message: `Refund of ${actualCurrency} ${actualRefundAmount.toFixed(2)} processed successfully for Order #${order.orderNumber}.`,
+      refund: refundResult,
+      order: updatedOrder
+    });
+  } catch (err) {
+    console.error("[Admin API] Refund error:", err.message);
     res.status(400).json({ success: false, message: err.message });
   }
 });
