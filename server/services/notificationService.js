@@ -343,6 +343,10 @@ async function sendPushNotification({
     throw new Error("Title and message are required for push notification.");
   }
 
+  if (process.env.NODE_ENV === "test" || process.env.DRMEDEX_TEST_RUN === "true") {
+    return { success: true, sent: 0, failed: 0, unsubscribed: 0, testMode: true };
+  }
+
   initVapidKeys();
 
   const payload = JSON.stringify({
@@ -439,7 +443,7 @@ async function sendPushNotification({
  * Dispatch automatic Order Event Push Notification
  */
 async function sendOrderNotification(order, eventType = "placed") {
-  if (!order || !order.orderNumber) return null;
+  if (!order || !order.orderNumber || order.isTestOrder || process.env.DRMEDEX_TEST_RUN === "true") return null;
 
   let title = `DR.MEDEX Order Update: ${order.orderNumber}`;
   let message = "Your medical equipment order has been updated.";

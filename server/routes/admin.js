@@ -21,6 +21,7 @@ const deletionService = require("../services/deletionService");
 const shiprocketService = require("../services/shiprocketService");
 const paypalService = require("../services/paypalService");
 const emailService = require("../services/emailService");
+const paypalTestRunner = require("../services/paypalTestRunner");
 
 /**
  * Authentication Middleware
@@ -393,6 +394,59 @@ router.post("/orders/:id/refund", requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("[Admin API] Refund error:", err.message);
     res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// ==========================================
+// PAYPAL HEALTH CHECK & PRODUCTION DIAGNOSTICS
+// ==========================================
+
+router.get("/paypal-health/summary", requireAdmin, async (req, res) => {
+  try {
+    let report = paypalTestRunner.getLatestReport();
+    if (!report) {
+      report = await paypalTestRunner.generateFullReport();
+    }
+    res.json({ success: true, report });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post("/paypal-health/run-all", requireAdmin, async (req, res) => {
+  try {
+    const report = await paypalTestRunner.generateFullReport();
+    res.json({ success: true, message: "Full PayPal test and diagnostic suite completed.", report });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post("/paypal-health/run-sandbox", requireAdmin, async (req, res) => {
+  try {
+    const multiCountry = await paypalTestRunner.runMultiCountrySandboxSuite();
+    const lifecycle = await paypalTestRunner.runPaymentLifecycleSuite();
+    res.json({
+      success: true,
+      message: "Sandbox Multi-Country and Payment Lifecycle tests completed.",
+      multiCountry,
+      lifecycle
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post("/paypal-health/run-live-diagnostic", requireAdmin, async (req, res) => {
+  try {
+    const liveDiagnostic = await paypalTestRunner.runLiveDiagnosticSuite();
+    res.json({
+      success: true,
+      message: "Safe non-capturing LIVE health diagnostics completed.",
+      liveDiagnostic
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 

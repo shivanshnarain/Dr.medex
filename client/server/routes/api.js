@@ -419,6 +419,7 @@ router.get("/payment/paypal/config", (req, res) => {
     configured: pub.configured,
     hasClientId: pub.hasClientId,
     hasClientSecret: pub.hasClientSecret,
+    hasWebhookId: pub.hasWebhookId,
     environment: pub.environment,
     ...(pub.warning ? { warning: pub.warning } : {})
   });

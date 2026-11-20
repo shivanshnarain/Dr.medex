@@ -449,6 +449,7 @@ async function runComprehensiveTests() {
   if (passed !== total) {
     process.exit(1);
   }
+  process.exit(0);
 }
 
 runComprehensiveTests().catch((err) => {

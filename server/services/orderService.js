@@ -494,6 +494,7 @@ async function markOrderAsFailed(orderNumber, reason = "Payment cancelled or fai
     order.status = "CANCELLED";
     order.updatedAt = now;
   }
+  return order || null;
 }
 
 /**

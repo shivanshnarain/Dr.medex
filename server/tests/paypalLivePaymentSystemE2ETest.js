@@ -522,6 +522,7 @@ async function runTests() {
   console.log("\n================================================================================");
   console.log(`ALL TESTS PASSED: ${passedTests} / ${totalTests} test suites completed successfully!`);
   console.log("================================================================================\n");
+  process.exit(0);
 }
 
 runTests().catch((err) => {

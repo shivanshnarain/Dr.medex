@@ -49,6 +49,7 @@ const AdminMediaLibraryPage = lazy(() => import("./pages/AdminSystemPages").then
 const AdminWebsiteContentPage = lazy(() => import("./pages/AdminSystemPages").then((m) => ({ default: m.AdminWebsiteContentPage })));
 const AdminSettingsPage = lazy(() => import("./pages/AdminSystemPages").then((m) => ({ default: m.AdminSettingsPage })));
 const AdminAuditTrailPage = lazy(() => import("./pages/AdminSystemPages").then((m) => ({ default: m.AdminAuditTrailPage })));
+const AdminPayPalHealthPage = lazy(() => import("./pages/AdminPayPalHealthPage").then((m) => ({ default: m.AdminPayPalHealthPage })));
 
 function PageLoader() {
   return (
@@ -157,6 +158,7 @@ function AppContent() {
             <Route path="/admin/website-content" element={<AdminWebsiteContentPage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
             <Route path="/admin/audit-logs" element={<AdminAuditTrailPage />} />
+            <Route path="/admin/paypal-health" element={<AdminPayPalHealthPage />} />
 
             {/* 404 Fallback */}
             <Route path="*" element={<HomePage />} />

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
+  Activity,
   Package,
   Plus,
   Layers,
@@ -752,6 +753,23 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               >
                 <Clock size={16} className="text-neutral-700 shrink-0" />
                 <span className={isCollapsed ? "sr-only" : ""}>Audit Trail</span>
+              </Link>
+
+              {/* PayPal Health & Diagnostics */}
+              <Link
+                to="/admin/paypal-health"
+                title="PayPal Health & Diagnostics"
+                onClick={() => setIsMobileSidebarOpen(false)}
+                className={`w-full flex items-center ${
+                  isCollapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2"
+                } rounded-lg text-xs font-semibold transition-colors ${
+                  isCurrentRoute("/admin/paypal-health")
+                    ? "bg-neutral-100 text-black font-bold border-l-2 border-[#FFD400]"
+                    : "text-neutral-600 hover:text-black hover:bg-neutral-100"
+                }`}
+              >
+                <Activity size={16} className="text-neutral-700 shrink-0" />
+                <span className={isCollapsed ? "sr-only" : ""}>PayPal Health</span>
               </Link>
             </nav>
           </div>
