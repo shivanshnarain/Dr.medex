@@ -20,7 +20,7 @@ const HERO_CATEGORY_SLIDES: HeroCategorySlide[] = [
     id: "electrosurgical-equipment",
     categoryLabel: "ELECTRO SURGICAL EQUIPMENT",
     imageUrl:
-      "https://res.cloudinary.com/mjqna8qi/image/upload/v1794563069/dr-medex/hero-showcase/01-electrosurgical-equipment.png",
+      "https://res.cloudinary.com/mjqna8qi/image/upload/v1795324233/dr-medex/hero-showcase/01-electrosurgical-equipment.png",
     fallbackUrl: "/hero-showcase/01-electrosurgical-equipment.png",
     categoryPath: "/category/electrosurgical-units",
   },
@@ -28,7 +28,7 @@ const HERO_CATEGORY_SLIDES: HeroCategorySlide[] = [
     id: "cryosurgical-equipment",
     categoryLabel: "CRYO SURGICAL EQUIPMENT",
     imageUrl:
-      "https://res.cloudinary.com/mjqna8qi/image/upload/v1794563071/dr-medex/hero-showcase/02-cryosurgical-equipment.png",
+      "https://res.cloudinary.com/mjqna8qi/image/upload/v1795324235/dr-medex/hero-showcase/02-cryosurgical-equipment.png",
     fallbackUrl: "/hero-showcase/02-cryosurgical-equipment.png",
     categoryPath: "/category/cryo-surgical",
   },
@@ -44,7 +44,7 @@ const HERO_CATEGORY_SLIDES: HeroCategorySlide[] = [
     id: "ot-tables-equipment",
     categoryLabel: "OT TABLES EQUIPMENT",
     imageUrl:
-      "https://res.cloudinary.com/mjqna8qi/image/upload/v1794563104/dr-medex/hero-showcase/04-ot-tables-equipment.png",
+      "https://res.cloudinary.com/mjqna8qi/image/upload/v1795324236/dr-medex/hero-showcase/04-ot-tables-equipment.png",
     fallbackUrl: "/hero-showcase/04-ot-tables-equipment.png",
     categoryPath: "/category/examination-ot-tables",
   },
@@ -52,7 +52,7 @@ const HERO_CATEGORY_SLIDES: HeroCategorySlide[] = [
     id: "obg-equipment",
     categoryLabel: "OBG EQUIPMENT",
     imageUrl:
-      "https://res.cloudinary.com/mjqna8qi/image/upload/v1794563111/dr-medex/hero-showcase/05-obg-equipment.png",
+      "https://res.cloudinary.com/mjqna8qi/image/upload/v1795324237/dr-medex/hero-showcase/05-obg-equipment.png",
     fallbackUrl: "/hero-showcase/05-obg-equipment.png",
     categoryPath: "/category/obstetrics-and-gynaecology",
   },
@@ -60,7 +60,7 @@ const HERO_CATEGORY_SLIDES: HeroCategorySlide[] = [
     id: "general-medical-equipment",
     categoryLabel: "GENERAL MEDICAL EQUIPMENT",
     imageUrl:
-      "https://res.cloudinary.com/mjqna8qi/image/upload/v1794563133/dr-medex/hero-showcase/06-general-medical-equipment.png",
+      "https://res.cloudinary.com/mjqna8qi/image/upload/v1795324240/dr-medex/hero-showcase/06-general-medical-equipment.png",
     fallbackUrl: "/hero-showcase/06-general-medical-equipment.png",
     categoryPath: "/category/medical-equipment",
   },
@@ -192,12 +192,12 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
       className="relative w-full bg-white select-none pt-0 sm:pt-12 lg:pt-14 pb-12 sm:pb-16"
       aria-label="DR.MEDEX Hero Showcase"
     >
-      <div className="max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-[1400px] w-full mx-auto px-0 sm:px-6 lg:px-8">
         {/* TWO-COLUMN HERO SECTION: TEXT ON LEFT, SHOWCASE ON RIGHT */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 xl:gap-12 items-center">
           
           {/* LEFT COLUMN: HERO CONTENT (ON THE LEFT) */}
-          <div className="lg:col-span-5 flex flex-col items-start order-2 lg:order-1">
+          <div className="lg:col-span-5 flex flex-col items-start order-2 lg:order-1 px-4 sm:px-0">
             {/* Eyebrow text with dark-green text and matching dark-green dot */}
             <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#2D5A4A] mb-4 sm:mb-5">
               <span className="w-2 h-2 rounded-full bg-[#2D5A4A] shrink-0" />
@@ -258,11 +258,11 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
 
           {/* RIGHT COLUMN: MEDICAL PRODUCT IMAGE SHOWCASE (ON THE RIGHT) */}
           <div
-            className="lg:col-span-7 w-full order-1 lg:order-2 -mx-4 sm:mx-0 w-[calc(100%+2rem)] sm:w-full"
+            className="lg:col-span-7 w-full order-1 lg:order-2"
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
           >
-            <div className="flex flex-col sm:flex-row gap-0 sm:gap-6 md:gap-7 lg:gap-8 items-center sm:items-stretch">
+            <div className="flex flex-col sm:flex-row gap-0 sm:gap-6 md:gap-7 lg:gap-8 items-stretch">
               
               {/* THREE SECONDARY THUMBNAILS: HIDDEN ON MOBILE PHONES, VISIBLE ON SM AND UP */}
               <div className="relative z-10 hidden sm:flex sm:flex-col gap-2.5 sm:gap-3.5 md:gap-4 w-full sm:w-[88px] md:w-[96px] lg:w-[104px] shrink-0 justify-between items-center sm:items-stretch">
@@ -410,7 +410,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
         </div>
 
         {/* THREE BENEFIT CARDS DIRECTLY BELOW THE HERO: CONTINUOUS DARK-GREEN BG, SQUARE EDGES, CRISP WHITE SEPARATORS */}
-        <div className="mt-12 sm:mt-16 lg:mt-20 bg-[#2D5A4A] rounded-none overflow-hidden grid grid-cols-1 md:grid-cols-3 divide-y-2 md:divide-y-0 md:divide-x-2 divide-white">
+        <div className="mt-12 sm:mt-16 lg:mt-20 mx-4 sm:mx-0 bg-[#2D5A4A] rounded-none overflow-hidden grid grid-cols-1 md:grid-cols-3 divide-y-2 md:divide-y-0 md:divide-x-2 divide-white">
           
           {/* Card 1 */}
           <div className="p-6 sm:p-8 lg:p-10 flex flex-col justify-between bg-[#2D5A4A]">
