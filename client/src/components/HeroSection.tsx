@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, ShieldCheck, Cpu, Award } from "lucide-react";
-import ecgPulseImage from "../assets/ecg-pulse.png";
+import redEcgPulseImage from "../assets/ecg-pulse-red.png";
 
 interface HeroSectionProps {
   onOpenQuote?: (productTitle?: string) => void;
@@ -243,40 +243,42 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
 
             {/* Main Heading: Exactly THREE Lines */}
             <h1 className="text-3xl sm:text-4xl lg:text-[46px] xl:text-[50px] leading-[1.18] mb-3 sm:mb-4">
-              {/* Line 1: Advanced Medical on first line */}
-              <span className="block tracking-tight whitespace-nowrap">
-                <span className="font-light italic text-black">Advanced</span>{" "}
+              {/* Line 1: ADVANCED MEDICAL on first line */}
+              <span className="block tracking-[0.03em] whitespace-nowrap">
+                <span className="font-extrabold not-italic text-black uppercase">
+                  ADVANCED
+                </span>{" "}
                 <span
-                  className="inline-flex items-center justify-center px-2.5 sm:px-3.5 py-0.5 rounded-lg sm:rounded-xl font-bold italic text-white tracking-tight shadow-xs"
+                  className="inline-flex items-center justify-center px-2.5 sm:px-3.5 py-0.5 rounded-lg sm:rounded-xl font-extrabold not-italic text-white uppercase tracking-[0.03em] shadow-xs"
                   style={{
                     background:
                       "linear-gradient(90deg, #7AA05A 0%, #2D5A4A 50%, #7AA05A 100%)",
                   }}
                 >
-                  Medical
+                  MEDICAL
                 </span>
               </span>
 
               {/* Line 2: Technology for entirely on the second line */}
-              <span className="block font-light italic text-black tracking-tight mt-1 sm:mt-1.5">
+              <span className="block font-light italic text-black tracking-[0.02em] mt-1 sm:mt-1.5">
                 Technology for
               </span>
 
-              {/* Line 3: Better Care + ECG LOGO on the third line */}
-              <span className="inline-flex items-center flex-wrap sm:flex-nowrap gap-3 sm:gap-4 mt-1 sm:mt-1.5">
+              {/* Line 3: BETTER CARE + RED ECG LOGO on the third line */}
+              <span className="inline-flex items-center flex-nowrap gap-2 sm:gap-3 mt-1 sm:mt-1.5">
                 <span
-                  className="font-black italic tracking-tight shrink-0"
+                  className="font-black italic uppercase tracking-tight shrink-0"
                   style={{ color: "#C62828" }}
                 >
-                  Better Care
+                  BETTER CARE
                 </span>
 
-                {/* DR.MEDEX ECG Pulse Logo: Noticeably larger, clearly visible, vertically centered */}
+                {/* DR.MEDEX Red ECG Pulse Logo: Noticeably larger, extending slightly above and below the text */}
                 <img
-                  src={ecgPulseImage}
+                  src={redEcgPulseImage}
                   alt=""
                   aria-hidden="true"
-                  className="inline-block shrink-0 h-8 sm:h-10 lg:h-12 w-auto max-w-[32vw] sm:max-w-none object-contain select-none -translate-y-0.5 pointer-events-none"
+                  className="inline-block shrink-0 h-10 sm:h-12 lg:h-14 xl:h-15 w-auto max-w-[36vw] sm:max-w-none object-contain select-none -translate-y-0.5 pointer-events-none"
                   loading="eager"
                   decoding="async"
                 />
