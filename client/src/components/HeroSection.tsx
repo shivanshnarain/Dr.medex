@@ -194,7 +194,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
     >
       <div className="max-w-[1400px] w-full mx-auto px-0 sm:px-6 lg:px-8">
         {/* TWO-COLUMN HERO SECTION: TEXT ON LEFT, SHOWCASE ON RIGHT */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 xl:gap-12 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-8 lg:gap-10 xl:gap-12 items-center">
           
           {/* LEFT COLUMN: HERO CONTENT (ON THE LEFT) */}
           <div className="lg:col-span-5 flex flex-col items-start order-2 lg:order-1 px-4 sm:px-0">
@@ -398,14 +398,14 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                   </span>
                 </div>
 
-                {/* View Category Pill CTA (Part C: All screen sizes) */}
+                {/* View Category Pill CTA (Part C: All screen sizes, vertically slimmed by 15-20%) */}
                 <div
-                  className="absolute bottom-14 left-4 sm:bottom-6 sm:left-6 z-20"
+                  className="absolute bottom-4 left-3.5 sm:bottom-6 sm:left-6 z-20"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Link
                     to={activeSlide.categoryPath}
-                    className="group/cta inline-flex items-center gap-2.5 sm:gap-3 px-4 py-2 sm:px-5 sm:py-2.5 rounded-full bg-white text-black font-bold text-xs sm:text-sm shadow-[0_4px_16px_rgba(0,0,0,0.25)] hover:shadow-[0_6px_22px_rgba(0,0,0,0.32)] transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] select-none"
+                    className="group/cta inline-flex items-center gap-2.5 sm:gap-3 px-3.5 py-1.5 sm:px-5 sm:py-2 rounded-full bg-white text-black font-bold text-xs sm:text-sm shadow-[0_4px_16px_rgba(0,0,0,0.22)] hover:shadow-[0_6px_22px_rgba(0,0,0,0.3)] transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] select-none"
                     style={{ backgroundColor: "#FFFFFF", color: "#000000" }}
                     aria-label={`View ${activeSlide.categoryLabel}`}
                   >
@@ -419,9 +419,9 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                   </Link>
                 </div>
 
-                {/* Carousel Navigation Dots: INSIDE the image immediately above the curved border */}
+                {/* Carousel Navigation Dots: Positioned comfortably ABOVE the curved lines */}
                 <div
-                  className="absolute bottom-12 sm:bottom-5 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center gap-2 select-none"
+                  className="absolute bottom-5 sm:bottom-5 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center gap-2 select-none"
                   aria-label="Slideshow position indicator"
                   role="tablist"
                   onClick={(e) => e.stopPropagation()}
@@ -453,8 +453,8 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                   })}
                 </div>
 
-                {/* MOBILE ONLY: HERO CAROUSEL BOTTOM CURVE & LAYERED WHITE/DUAL-GREEN BORDER OVERLAY */}
-                <div className="absolute bottom-0 left-0 right-0 w-full h-[48px] pointer-events-none z-10 block sm:hidden overflow-hidden">
+                {/* MOBILE ONLY: HERO CAROUSEL BOTTOM CURVE (Shifted downward, 20% thinner green band) */}
+                <div className="absolute bottom-0 left-0 right-0 w-full h-[32px] pointer-events-none z-10 block sm:hidden overflow-hidden">
                   <svg
                     viewBox="0 0 1000 100"
                     preserveAspectRatio="none"
@@ -474,21 +474,21 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
 
                     {/* 3. Solid pure white fill below the green band transitioning into section background */}
                     <path
-                      d="M 0,100 C 280,96 460,94 680,90 C 840,74 930,56 1000,42 L 1000,100 L 0,100 Z"
+                      d="M 0,100 C 280,98 480,96 680,92 C 840,78 930,62 1000,44 L 1000,100 L 0,100 Z"
                       fill="#FFFFFF"
                     />
 
-                    {/* 2. Continuous curved green band: thicker at edges, thinner in center, dual-green gradient */}
+                    {/* 2. Continuous curved green band: 20% thinner, smooth brand gradient */}
                     <path
-                      d="M 0,74 C 280,86 460,84 680,70 C 840,50 930,26 1000,12 L 1000,42 C 930,56 840,74 680,90 C 460,94 280,96 0,100 Z"
+                      d="M 0,80 C 280,90 480,90 680,76 C 840,56 930,34 1000,20 L 1000,44 C 930,62 840,78 680,92 C 480,96 280,98 0,100 Z"
                       fill="url(#mobileGreenBandGrad)"
                     />
 
                     {/* 1. Clean white separator/border immediately above the green strip */}
                     <path
-                      d="M 0,72 C 280,84 460,82 680,68 C 840,48 930,24 1000,10"
+                      d="M 0,78 C 280,88 480,88 680,74 C 840,54 930,32 1000,18"
                       stroke="#FFFFFF"
-                      strokeWidth="5"
+                      strokeWidth="4.5"
                       strokeLinecap="round"
                     />
                   </svg>
