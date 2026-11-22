@@ -20,7 +20,7 @@ const HERO_CATEGORY_SLIDES: HeroCategorySlide[] = [
     id: "electrosurgical-equipment",
     categoryLabel: "ELECTRO SURGICAL EQUIPMENT",
     imageUrl:
-      "https://res.cloudinary.com/mjqna8qi/image/upload/v1795324233/dr-medex/hero-showcase/01-electrosurgical-equipment.png",
+      "https://res.cloudinary.com/mjqna8qi/image/upload/v1795329929/dr-medex/hero-showcase/01-electrosurgical-equipment.png",
     fallbackUrl: "/hero-showcase/01-electrosurgical-equipment.png",
     categoryPath: "/category/electrosurgical-units",
   },
@@ -28,7 +28,7 @@ const HERO_CATEGORY_SLIDES: HeroCategorySlide[] = [
     id: "cryosurgical-equipment",
     categoryLabel: "CRYO SURGICAL EQUIPMENT",
     imageUrl:
-      "https://res.cloudinary.com/mjqna8qi/image/upload/v1795324235/dr-medex/hero-showcase/02-cryosurgical-equipment.png",
+      "https://res.cloudinary.com/mjqna8qi/image/upload/v1795329931/dr-medex/hero-showcase/02-cryosurgical-equipment.png",
     fallbackUrl: "/hero-showcase/02-cryosurgical-equipment.png",
     categoryPath: "/category/cryo-surgical",
   },
@@ -36,7 +36,7 @@ const HERO_CATEGORY_SLIDES: HeroCategorySlide[] = [
     id: "ot-lights-equipment",
     categoryLabel: "OT LIGHTS EQUIPMENT",
     imageUrl:
-      "https://res.cloudinary.com/mjqna8qi/image/upload/v1794563085/dr-medex/hero-showcase/03-ot-lights-equipment.png",
+      "https://res.cloudinary.com/mjqna8qi/image/upload/v1795329932/dr-medex/hero-showcase/03-ot-lights-equipment.png",
     fallbackUrl: "/hero-showcase/03-ot-lights-equipment.png",
     categoryPath: "/category/ot-lights",
   },
@@ -44,7 +44,7 @@ const HERO_CATEGORY_SLIDES: HeroCategorySlide[] = [
     id: "ot-tables-equipment",
     categoryLabel: "OT TABLES EQUIPMENT",
     imageUrl:
-      "https://res.cloudinary.com/mjqna8qi/image/upload/v1795324236/dr-medex/hero-showcase/04-ot-tables-equipment.png",
+      "https://res.cloudinary.com/mjqna8qi/image/upload/v1795329933/dr-medex/hero-showcase/04-ot-tables-equipment.png",
     fallbackUrl: "/hero-showcase/04-ot-tables-equipment.png",
     categoryPath: "/category/examination-ot-tables",
   },
@@ -52,7 +52,7 @@ const HERO_CATEGORY_SLIDES: HeroCategorySlide[] = [
     id: "obg-equipment",
     categoryLabel: "OBG EQUIPMENT",
     imageUrl:
-      "https://res.cloudinary.com/mjqna8qi/image/upload/v1795324237/dr-medex/hero-showcase/05-obg-equipment.png",
+      "https://res.cloudinary.com/mjqna8qi/image/upload/v1795329934/dr-medex/hero-showcase/05-obg-equipment.png",
     fallbackUrl: "/hero-showcase/05-obg-equipment.png",
     categoryPath: "/category/obstetrics-and-gynaecology",
   },
@@ -60,7 +60,7 @@ const HERO_CATEGORY_SLIDES: HeroCategorySlide[] = [
     id: "general-medical-equipment",
     categoryLabel: "GENERAL MEDICAL EQUIPMENT",
     imageUrl:
-      "https://res.cloudinary.com/mjqna8qi/image/upload/v1795324240/dr-medex/hero-showcase/06-general-medical-equipment.png",
+      "https://res.cloudinary.com/mjqna8qi/image/upload/v1795329935/dr-medex/hero-showcase/06-general-medical-equipment.png",
     fallbackUrl: "/hero-showcase/06-general-medical-equipment.png",
     categoryPath: "/category/medical-equipment",
   },
@@ -381,26 +381,26 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                   }}
                 />
 
-                {/* Category Name & Fading Green Underline (Part B: All screen sizes) */}
+                {/* Category Name & Fading Light-Green Underline (Ends directly beneath SURGICAL) */}
                 <div className="absolute top-4 left-4 sm:top-5 sm:left-6 z-20 pointer-events-none flex flex-col items-start">
-                  <span
-                    className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]"
-                    style={{ color: "#FFFFFF" }}
-                  >
-                    {activeSlide.categoryLabel}
+                  <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)] flex flex-wrap items-baseline gap-x-1.5">
+                    <span className="relative inline-block pb-1">
+                      {activeSlide.categoryLabel.replace(/\s+EQUIPMENT$/, "")}
+                      <span
+                        className="absolute bottom-0 left-0 h-[2px] sm:h-[2.5px] w-full rounded-full pointer-events-none"
+                        style={{
+                          background:
+                            "linear-gradient(to right, #7AA05A 0%, rgba(122, 160, 90, 0.7) 45%, rgba(122, 160, 90, 0.25) 80%, rgba(122, 160, 90, 0) 100%)",
+                        }}
+                      />
+                    </span>
+                    {activeSlide.categoryLabel.endsWith(" EQUIPMENT") && <span>EQUIPMENT</span>}
                   </span>
-                  <div
-                    className="h-[2.5px] w-48 sm:w-60 mt-1.5 rounded-full"
-                    style={{
-                      background:
-                        "linear-gradient(to right, #2D5A4A 0%, #7AA05A 45%, rgba(122, 160, 90, 0) 100%)",
-                    }}
-                  />
                 </div>
 
                 {/* View Category Pill CTA (Part C: All screen sizes) */}
                 <div
-                  className="absolute bottom-6 left-4 sm:bottom-6 sm:left-6 z-20"
+                  className="absolute bottom-7 left-4 sm:bottom-6 sm:left-6 z-20"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Link
@@ -421,7 +421,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
 
                 {/* Carousel Navigation Dots with Glowing Outline (Part A.3 & Part F: All screen sizes) */}
                 <div
-                  className="absolute bottom-3.5 sm:bottom-5 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center gap-2 select-none"
+                  className="absolute bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center gap-2 select-none"
                   aria-label="Slideshow position indicator"
                   role="tablist"
                   onClick={(e) => e.stopPropagation()}
@@ -436,7 +436,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                         className={`transition-all duration-300 focus:outline-none cursor-pointer ${
                           isActive
                             ? "w-7 h-2.5 rounded-full border-[1.5px] border-white"
-                            : "w-2 h-2 rounded-full bg-white/90 hover:bg-white shadow-xs"
+                            : "w-2 h-2 rounded-full bg-white/95 hover:bg-white shadow-xs"
                         }`}
                         style={
                           isActive
@@ -453,38 +453,42 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                   })}
                 </div>
 
-                {/* MOBILE ONLY: HERO CAROUSEL BOTTOM CURVE & DUAL-GREEN LAYERED BORDER (Part A: Mobile Only) */}
-                <div className="absolute bottom-0 left-0 right-0 w-full h-[52px] pointer-events-none z-10 block sm:hidden overflow-hidden">
+                {/* MOBILE ONLY: HERO CAROUSEL BOTTOM CURVE & LAYERED WHITE/DUAL-GREEN BORDER */}
+                <div className="absolute bottom-0 left-0 right-0 w-full h-[62px] pointer-events-none z-10 block sm:hidden overflow-hidden">
                   <svg
-                    viewBox="0 0 400 55"
+                    viewBox="0 0 1000 140"
                     preserveAspectRatio="none"
                     className="w-full h-full"
                     fill="none"
                     xmlns="http://www.w3.org/2000/svg"
                   >
-                    {/* Seamless white fill below the curve covering bottom edge */}
+                    <defs>
+                      <linearGradient id="mobileGreenBandGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#7AA05A" />
+                        <stop offset="25%" stopColor="#558052" />
+                        <stop offset="50%" stopColor="#2D5A4A" />
+                        <stop offset="75%" stopColor="#558052" />
+                        <stop offset="100%" stopColor="#7AA05A" />
+                      </linearGradient>
+                    </defs>
+
+                    {/* 3. Solid pure white fill below the green band covering bottom edge into section background */}
                     <path
-                      d="M 0,34 C 110,44 240,38 400,10 L 400,55 L 0,55 Z"
+                      d="M 0,83 C 350,96 650,97 1000,64 L 1000,140 L 0,140 Z"
                       fill="#FFFFFF"
                     />
 
-                    {/* Outer / edge light green layered swoop (#7AA05A from MEDEX logo) */}
+                    {/* 2. Continuous curved green band: wider at both edges, thinner in the middle, smooth brand gradient */}
                     <path
-                      d="M 120,40 C 230,38 320,28 400,0 L 400,10 C 320,34 230,44 120,44 Z"
-                      fill="#7AA05A"
-                    />
-                    <path
-                      d="M 0,32 C 110,42 240,34 400,6"
-                      stroke="#7AA05A"
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
+                      d="M 0,59 C 350,85 650,73 1000,30 L 1000,64 C 650,97 350,96 0,83 Z"
+                      fill="url(#mobileGreenBandGrad)"
                     />
 
-                    {/* Inner / central dark green curved line (#2D5A4A from DR. logo) */}
+                    {/* 1. Clean white separator/border immediately above the green strip */}
                     <path
-                      d="M 0,34 C 110,44 240,38 400,10"
-                      stroke="#2D5A4A"
-                      strokeWidth="2.5"
+                      d="M 0,56 C 350,83 650,71 1000,28"
+                      stroke="#FFFFFF"
+                      strokeWidth="6"
                       strokeLinecap="round"
                     />
                   </svg>
