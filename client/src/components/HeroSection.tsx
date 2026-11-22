@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, ShieldCheck, Cpu, Award } from "lucide-react";
+import ecgPulseImage from "../assets/ecg-pulse.png";
 
 interface HeroSectionProps {
   onOpenQuote?: (productTitle?: string) => void;
@@ -211,12 +212,13 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                 Advanced
               </span>
 
-              {/* 2. MEDICAL: Bold italic typography, white text inside rounded rectangular green highlight matching Reference Image 2 */}
+              {/* 2. MEDICAL: Bold italic typography, white text inside rounded rectangular brand gradient badge */}
               <span className="inline-block my-1 sm:my-1.5">
                 <span
                   className="inline-flex items-center justify-center px-4 sm:px-6 py-0.5 sm:py-1 rounded-xl sm:rounded-2xl font-black italic text-white tracking-tight shadow-sm"
                   style={{
-                    backgroundColor: "#7AA05A",
+                    background:
+                      "linear-gradient(90deg, #7AA05A 0%, #2D5A4A 50%, #7AA05A 100%)",
                   }}
                 >
                   Medical
@@ -228,36 +230,24 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                 Technology for
               </span>
 
-              {/* 4. BETTER CARE + 5. ECG HEARTBEAT ICON */}
-              <span className="inline-flex items-center flex-wrap gap-2 mt-0.5">
+              {/* 4. BETTER CARE + 5. SUPPLIED TRANSPARENT ECG HEARTBEAT IMAGE */}
+              <span className="inline-flex items-center flex-wrap gap-2 sm:gap-2.5 mt-0.5">
                 <span
-                  className="font-black italic text-[#7AA05A] tracking-tight"
+                  className="font-black italic text-[#7AA05A] tracking-tight shrink-0"
                   style={{ color: "#7AA05A" }}
                 >
                   Better Care
                 </span>
 
-                {/* 5. ECG Waveform Icon: Exact shape from Reference Image 2, #7AA05A with subtle green glow */}
-                <svg
-                  width="64"
-                  height="26"
-                  viewBox="0 0 64 26"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="inline-block shrink-0 -translate-y-0.5"
-                  style={{
-                    filter: "drop-shadow(0 0 6px rgba(122, 160, 90, 0.75))",
-                  }}
+                {/* 5. ECG Waveform Image: Direct supplied transparent asset */}
+                <img
+                  src={ecgPulseImage}
+                  alt=""
                   aria-hidden="true"
-                >
-                  <path
-                    d="M 0 13 L 16 13 L 19 15 L 22 13 L 25 13 L 29 2 L 34 24 L 38 10 L 41 14 L 44 13 L 64 13"
-                    stroke="#7AA05A"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                  className="inline-block shrink-0 h-6 sm:h-7 lg:h-8 xl:h-9 w-auto max-w-[28vw] sm:max-w-none object-contain select-none -translate-y-0.5 sm:-translate-y-1 pointer-events-none"
+                  loading="eager"
+                  decoding="async"
+                />
               </span>
             </h1>
 
@@ -395,14 +385,14 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                   </span>
                 </div>
 
-                {/* Explore Products Pill CTA (Exact Reference Image 1 & 5 Match) */}
+                {/* Explore Products Pill CTA: Shifted upward for clear gap above dots, horizontally balanced */}
                 <div
-                  className="absolute bottom-6 left-3.5 sm:bottom-6 sm:left-6 z-20"
+                  className="absolute bottom-9 left-3.5 sm:bottom-9 sm:left-6 z-20"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Link
                     to={activeSlide.categoryPath}
-                    className="group/cta inline-flex items-center gap-2 sm:gap-2.5 px-3.5 py-1 sm:px-4.5 sm:py-1.5 rounded-full bg-white text-black font-bold text-xs sm:text-sm shadow-[0_4px_16px_rgba(0,0,0,0.22)] hover:shadow-[0_6px_22px_rgba(0,0,0,0.3)] transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] select-none"
+                    className="group/cta inline-flex items-center gap-2 sm:gap-2.5 px-3.5 py-1 sm:px-4 sm:py-1.5 rounded-full bg-white text-black font-bold text-xs sm:text-sm shadow-[0_4px_16px_rgba(0,0,0,0.22)] hover:shadow-[0_6px_22px_rgba(0,0,0,0.3)] transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] select-none"
                     style={{ backgroundColor: "#FFFFFF", color: "#000000" }}
                     aria-label={`Explore ${activeSlide.categoryLabel}`}
                   >
@@ -416,9 +406,9 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                   </Link>
                 </div>
 
-                {/* Carousel Navigation Dots: Clean slim active pill with thin white outline & smaller white dots */}
+                {/* Carousel Navigation Dots: Clean slim active pill with thin white outline & 15-20% smaller inactive white dots */}
                 <div
-                  className="absolute bottom-4 sm:bottom-5 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center gap-2 select-none"
+                  className="absolute bottom-3.5 sm:bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center gap-2 select-none"
                   aria-label="Slideshow position indicator"
                   role="tablist"
                   onClick={(e) => e.stopPropagation()}
@@ -432,7 +422,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                         onClick={() => handleSelectThumbnail(idx)}
                         className={`transition-all duration-300 focus:outline-none cursor-pointer ${isActive
                           ? "w-6 h-2 sm:w-7 sm:h-2.5 rounded-full border border-white"
-                          : "w-1.5 h-1.5 rounded-full bg-white/95 hover:bg-white shadow-xs"
+                          : "w-[5px] h-[5px] rounded-full bg-white/95 hover:bg-white shadow-xs"
                           }`}
                         style={
                           isActive
@@ -449,7 +439,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                   })}
                 </div>
 
-                {/* MOBILE ONLY: HERO CAROUSEL DEEPER BOTTOM CURVE (Exact Reference Image 1 & 5 Match) */}
+                {/* MOBILE ONLY: HERO CAROUSEL TAPERED GREEN CURVE (Thin in centre, smoothly wider at edges) */}
                 <div className="absolute bottom-0 left-0 right-0 w-full h-[56px] pointer-events-none z-10 block sm:hidden overflow-hidden">
                   <svg
                     viewBox="0 0 1000 140"
@@ -461,29 +451,28 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                     <defs>
                       <linearGradient id="mobileGreenBandGrad" x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" stopColor="#7AA05A" />
-                        <stop offset="20%" stopColor="#558052" />
-                        <stop offset="45%" stopColor="#2D5A4A" />
-                        <stop offset="60%" stopColor="#2D5A4A" />
-                        <stop offset="80%" stopColor="#558052" />
+                        <stop offset="25%" stopColor="#558052" />
+                        <stop offset="50%" stopColor="#2D5A4A" />
+                        <stop offset="75%" stopColor="#558052" />
                         <stop offset="100%" stopColor="#7AA05A" />
                       </linearGradient>
                     </defs>
 
-                    {/* 3. Solid pure white fill below the green band transitioning into section background */}
+                    {/* 3. Solid pure white fill below the tapered green band transitioning into section background */}
                     <path
-                      d="M 0,88 C 180,132 380,140 520,140 C 720,140 860,100 1000,44 L 1000,140 L 0,140 Z"
+                      d="M 0,86 C 200,134 380,138 500,138 C 680,138 840,112 1000,56 L 1000,140 L 0,140 Z"
                       fill="#FFFFFF"
                     />
 
-                    {/* 2. Continuous deeper curved green band: noticeable rise on both ends, sweeping high on right */}
+                    {/* 2. Continuous tapered green band: noticeably thinner around centre (8 units), smoothly widening to both edges (28 & 30 units) */}
                     <path
-                      d="M 0,70 C 180,120 380,130 520,128 C 720,124 860,70 1000,12 L 1000,44 C 860,100 720,140 520,140 C 380,140 180,132 0,88 Z"
+                      d="M 0,58 C 200,120 380,130 500,130 C 680,130 840,92 1000,26 L 1000,56 C 840,112 680,138 500,138 C 380,138 200,134 0,86 Z"
                       fill="url(#mobileGreenBandGrad)"
                     />
 
                     {/* 1. Clean white separator/border immediately above the green strip */}
                     <path
-                      d="M 0,68 C 180,118 380,128 520,126 C 720,122 860,68 1000,10"
+                      d="M 0,56 C 200,118 380,128 500,128 C 680,128 840,90 1000,24"
                       stroke="#FFFFFF"
                       strokeWidth="4.5"
                       strokeLinecap="round"
