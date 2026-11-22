@@ -286,9 +286,10 @@ async function createOrder({
   customer = {},
   returnUrl,
   cancelUrl
-}) {
-  const token = await getAccessToken();
-  const baseUrl = getBaseUrl();
+}, explicitMode) {
+  const mode = explicitMode || getMode();
+  const token = await getAccessToken(mode);
+  const baseUrl = mode === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
 
   // Normalize currency to a verified PayPal-supported ISO code (default USD)
   const cleanCurrency = isPayPalSupportedCurrency(currency)
@@ -394,14 +395,15 @@ async function createOrder({
 /**
  * Capture an approved PayPal order with idempotency
  */
-async function captureOrder(paypalOrderId) {
+async function captureOrder(paypalOrderId, explicitMode) {
   const cleanOrderId = String(paypalOrderId || "").trim();
   if (!cleanOrderId) {
     throw new Error("PayPal orderID is required for capture.");
   }
 
-  const token = await getAccessToken();
-  const baseUrl = getBaseUrl();
+  const mode = explicitMode || getMode();
+  const token = await getAccessToken(mode);
+  const baseUrl = mode === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
 
   const res = await fetch(`${baseUrl}/v2/checkout/orders/${encodeURIComponent(cleanOrderId)}/capture`, {
     method: "POST",
@@ -421,7 +423,7 @@ async function captureOrder(paypalOrderId) {
       data.details.some((d) => d.issue === "ORDER_ALREADY_CAPTURED")
     ) {
       try {
-        const existingDetails = await getOrderDetails(cleanOrderId);
+        const existingDetails = await getOrderDetails(cleanOrderId, mode);
         if (existingDetails && existingDetails.status === "COMPLETED") {
           return existingDetails;
         }
@@ -444,13 +446,14 @@ async function captureOrder(paypalOrderId) {
 /**
  * Retrieve details for an existing PayPal order
  */
-async function getOrderDetails(paypalOrderId) {
+async function getOrderDetails(paypalOrderId, explicitMode) {
   const cleanOrderId = String(paypalOrderId || "").trim();
   if (!cleanOrderId) {
     throw new Error("PayPal orderID is required.");
   }
-  const token = await getAccessToken();
-  const baseUrl = getBaseUrl();
+  const mode = explicitMode || getMode();
+  const token = await getAccessToken(mode);
+  const baseUrl = mode === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
 
   const res = await fetch(`${baseUrl}/v2/checkout/orders/${encodeURIComponent(cleanOrderId)}`, {
     method: "GET",
@@ -478,14 +481,15 @@ async function refundCapture({
   currency = "USD",
   note = "DR.MEDEX Customer Refund",
   requestId = null
-}) {
+}, explicitMode) {
   const cleanCaptureId = String(captureId || "").trim();
   if (!cleanCaptureId) {
     throw new Error("captureId is required for refund.");
   }
 
-  const token = await getAccessToken();
-  const baseUrl = getBaseUrl();
+  const mode = explicitMode || getMode();
+  const token = await getAccessToken(mode);
+  const baseUrl = mode === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
   const cleanRequestId = requestId || `refund-${cleanCaptureId}-${Date.now()}`;
 
   const payload = {
@@ -533,13 +537,14 @@ async function refundCapture({
 /**
  * Retrieve refund details from PayPal
  */
-async function getRefundDetails(refundId) {
+async function getRefundDetails(refundId, explicitMode) {
   const cleanRefundId = String(refundId || "").trim();
   if (!cleanRefundId) {
     throw new Error("refundId is required.");
   }
-  const token = await getAccessToken();
-  const baseUrl = getBaseUrl();
+  const mode = explicitMode || getMode();
+  const token = await getAccessToken(mode);
+  const baseUrl = mode === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
 
   const res = await fetch(`${baseUrl}/v2/payments/refunds/${encodeURIComponent(cleanRefundId)}`, {
     method: "GET",
