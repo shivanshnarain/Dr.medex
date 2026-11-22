@@ -204,34 +204,61 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
               <span>TRUSTED MEDICAL EQUIPMENT PARTNER</span>
             </div>
 
-            {/* Main Heading: Consistent font family, weight, and size across all lines */}
-            <h1 className="text-4xl sm:text-5xl lg:text-[50px] xl:text-[54px] font-black leading-[1.08] mb-5 sm:mb-6">
-              <span
-                className="hero-heading-outline inline-block tracking-[0.035em]"
-                style={{
-                  color: "#FFFFFF",
-                  WebkitTextFillColor: "#FFFFFF",
-                  WebkitTextStroke: "1.8px #2D5A4A",
-                  paintOrder: "stroke fill",
-                  strokeLinejoin: "round",
-                  strokeMiterlimit: 2,
-                  letterSpacing: "0.035em",
-                  wordSpacing: "0.1em",
-                  textRendering: "geometricPrecision",
-                }}
-              >
+            {/* Main Heading: Matching Reference Image 2 exact typography and styling */}
+            <h1 className="text-4xl sm:text-5xl lg:text-[52px] xl:text-[56px] leading-[1.12] mb-5 sm:mb-6">
+              {/* 1. ADVANCED: Black text, thin elegant italic typography */}
+              <span className="block font-light italic text-black tracking-tight">
                 Advanced
-                <br />
-                Medical
-                <br />
+              </span>
+
+              {/* 2. MEDICAL: Bold italic typography, white text inside rounded rectangular green gradient highlight */}
+              <span className="inline-block my-1 sm:my-1.5">
+                <span
+                  className="inline-flex items-center justify-center px-4 sm:px-6 py-0.5 sm:py-1 rounded-xl sm:rounded-2xl font-black italic text-white tracking-tight shadow-sm"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, #7AA05A 0%, #2D5A4A 45%, #2D5A4A 55%, #7AA05A 100%)",
+                  }}
+                >
+                  Medical
+                </span>
+              </span>
+
+              {/* 3. TECHNOLOGY FOR: Black text, elegant italic typography */}
+              <span className="block font-light italic text-black tracking-tight">
                 Technology for
               </span>
-              <br />
-              <span
-                className="text-[#7AA05A] inline-block mt-0.5 tracking-tight"
-                style={{ color: "#7AA05A" }}
-              >
-                Better Care
+
+              {/* 4. BETTER CARE + 5. ECG HEARTBEAT ICON */}
+              <span className="inline-flex items-center flex-wrap gap-2 mt-0.5">
+                <span
+                  className="font-black italic text-[#7AA05A] tracking-tight"
+                  style={{ color: "#7AA05A" }}
+                >
+                  Better Care
+                </span>
+
+                {/* 5. ECG Waveform Icon: Exact shape from Reference Image 2, #7AA05A with subtle green glow */}
+                <svg
+                  width="64"
+                  height="26"
+                  viewBox="0 0 64 26"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="inline-block shrink-0 -translate-y-0.5"
+                  style={{
+                    filter: "drop-shadow(0 0 6px rgba(122, 160, 90, 0.75))",
+                  }}
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M 0 13 L 16 13 L 19 15 L 22 13 L 25 13 L 29 2 L 34 24 L 38 10 L 41 14 L 44 13 L 64 13"
+                    stroke="#7AA05A"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
               </span>
             </h1>
 
@@ -240,18 +267,20 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
               Precision-engineered medical equipment for hospitals, clinics and healthcare professionals worldwide.
             </p>
 
-            {/* Explore Products CTA Button with white outline and red background */}
+            {/* View Category CTA Button */}
             <div>
               <Link
                 to="/shop-all"
-                className="group inline-flex items-center gap-2.5 px-7 py-3.5 rounded-full bg-[#C62828] hover:bg-[#B71C1C] text-white text-sm sm:text-base font-bold border-2 border-white cta-shadow-enhanced transition-all duration-200 cursor-pointer animate-hero-float"
-                style={{ backgroundColor: "#C62828" }}
+                className="group/cta inline-flex items-center gap-3 px-6 sm:px-7 py-3 sm:py-3.5 rounded-full bg-white text-black font-bold text-sm sm:text-base border border-neutral-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.12)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition-all duration-200 hover:scale-[1.02] cursor-pointer"
+                style={{ backgroundColor: "#FFFFFF", color: "#000000" }}
               >
-                <span className="text-white">Explore Products</span>
-                <ArrowRight
-                  size={17}
-                  className="text-white transition-transform duration-200 ease-out group-hover:translate-x-1.5 shrink-0"
-                />
+                <span className="text-black font-bold">View Category</span>
+                <span
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 transition-transform duration-200 group-hover/cta:translate-x-0.5"
+                  style={{ backgroundColor: "#7AA05A" }}
+                >
+                  <ArrowRight size={15} className="text-white" strokeWidth={2.5} />
+                </span>
               </Link>
             </div>
           </div>
@@ -343,65 +372,124 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                   })}
                 </div>
 
-                {/* Subtle localized gradient ONLY behind upper-left category text */}
+                {/* Subtle dark vignette ONLY behind upper-left category text for contrast */}
                 <div
-                  className="absolute top-0 left-0 w-64 max-w-[60%] h-20 pointer-events-none z-10 rounded-none sm:rounded-tl-2xl"
+                  className="absolute top-0 left-0 w-72 max-w-[70%] h-24 pointer-events-none z-10 rounded-none sm:rounded-tl-2xl"
                   style={{
                     background:
-                      "radial-gradient(ellipse at top left, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.12) 40%, rgba(255, 255, 255, 0) 75%)",
+                      "radial-gradient(ellipse at top left, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.15) 50%, rgba(0, 0, 0, 0) 80%)",
                   }}
                 />
 
-                {/* Category Name: Light green matching the DR.MEDEX logo text (MEDEX) */}
-                <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 pointer-events-none">
+                {/* Category Name & Fading Green Underline (Part B: All screen sizes) */}
+                <div className="absolute top-4 left-4 sm:top-5 sm:left-6 z-20 pointer-events-none flex flex-col items-start">
                   <span
-                    className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-[#7AA05A]"
-                    style={{ color: "#7AA05A" }}
+                    className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]"
+                    style={{ color: "#FFFFFF" }}
                   >
                     {activeSlide.categoryLabel}
                   </span>
+                  <div
+                    className="h-[2.5px] w-48 sm:w-60 mt-1.5 rounded-full"
+                    style={{
+                      background:
+                        "linear-gradient(to right, #2D5A4A 0%, #7AA05A 45%, rgba(122, 160, 90, 0) 100%)",
+                    }}
+                  />
                 </div>
 
-                {/* View Category Link: Bottom-Right, Pure White Text & Arrow, NO red, NO shadow, NO button/box */}
+                {/* View Category Pill CTA (Part C: All screen sizes) */}
                 <div
-                  className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-20"
+                  className="absolute bottom-6 left-4 sm:bottom-6 sm:left-6 z-20"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Link
                     to={activeSlide.categoryPath}
-                    className="group/link inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-white hover:text-white/85 transition-all duration-200 hover:underline"
+                    className="group/cta inline-flex items-center gap-2.5 sm:gap-3 px-4 py-2 sm:px-5 sm:py-2.5 rounded-full bg-white text-black font-bold text-xs sm:text-sm shadow-[0_4px_16px_rgba(0,0,0,0.25)] hover:shadow-[0_6px_22px_rgba(0,0,0,0.32)] transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] select-none"
+                    style={{ backgroundColor: "#FFFFFF", color: "#000000" }}
+                    aria-label={`View ${activeSlide.categoryLabel}`}
                   >
-                    <span>View Category</span>
-                    <ArrowRight
-                      size={14}
-                      className="text-white group-hover/link:translate-x-1 transition-transform"
-                    />
+                    <span className="font-bold tracking-tight text-black">View Category</span>
+                    <span
+                      className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center shrink-0 transition-transform duration-200 group-hover/cta:translate-x-0.5"
+                      style={{ backgroundColor: "#7AA05A" }}
+                    >
+                      <ArrowRight size={13} className="text-white" strokeWidth={2.5} />
+                    </span>
                   </Link>
                 </div>
 
-              </div>
+                {/* Carousel Navigation Dots with Glowing Outline (Part A.3 & Part F: All screen sizes) */}
+                <div
+                  className="absolute bottom-3.5 sm:bottom-5 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center gap-2 select-none"
+                  aria-label="Slideshow position indicator"
+                  role="tablist"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {HERO_CATEGORY_SLIDES.map((slide, idx) => {
+                    const isActive = idx === activeIndex;
+                    return (
+                      <button
+                        key={slide.id}
+                        type="button"
+                        onClick={() => handleSelectThumbnail(idx)}
+                        className={`transition-all duration-300 focus:outline-none cursor-pointer ${
+                          isActive
+                            ? "w-7 h-2.5 rounded-full border-[1.5px] border-white"
+                            : "w-2 h-2 rounded-full bg-white/90 hover:bg-white shadow-xs"
+                        }`}
+                        style={
+                          isActive
+                            ? {
+                                background: "linear-gradient(90deg, #2D5A4A 0%, #7AA05A 100%)",
+                                boxShadow: "0 0 8px rgba(255, 255, 255, 0.95), 0 0 3px rgba(122, 160, 90, 0.8)",
+                              }
+                            : undefined
+                        }
+                        aria-current={isActive ? "true" : undefined}
+                        aria-label={`Slide ${idx + 1} of 6: ${slide.categoryLabel}`}
+                      />
+                    );
+                  })}
+                </div>
 
-              {/* EXACTLY SIX SLIDESHOW INDICATOR DOTS BELOW THE IMAGE (MOBILE ONLY) */}
-              <div
-                className="w-full flex sm:hidden items-center justify-center gap-2 mt-3.5 select-none"
-                aria-label="Slideshow position indicator"
-                role="tablist"
-              >
-                {HERO_CATEGORY_SLIDES.map((slide, idx) => {
-                  const isActive = idx === activeIndex;
-                  return (
-                    <span
-                      key={slide.id}
-                      className={`h-1.5 rounded-full transition-all duration-300 ${
-                        isActive
-                          ? "w-5 bg-[#7AA05A]"
-                          : "w-1.5 bg-[#D1D5DB]"
-                      }`}
-                      aria-current={isActive ? "true" : undefined}
-                      aria-label={`Slide ${idx + 1} of 6: ${slide.categoryLabel}`}
+                {/* MOBILE ONLY: HERO CAROUSEL BOTTOM CURVE & DUAL-GREEN LAYERED BORDER (Part A: Mobile Only) */}
+                <div className="absolute bottom-0 left-0 right-0 w-full h-[52px] pointer-events-none z-10 block sm:hidden overflow-hidden">
+                  <svg
+                    viewBox="0 0 400 55"
+                    preserveAspectRatio="none"
+                    className="w-full h-full"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    {/* Seamless white fill below the curve covering bottom edge */}
+                    <path
+                      d="M 0,34 C 110,44 240,38 400,10 L 400,55 L 0,55 Z"
+                      fill="#FFFFFF"
                     />
-                  );
-                })}
+
+                    {/* Outer / edge light green layered swoop (#7AA05A from MEDEX logo) */}
+                    <path
+                      d="M 120,40 C 230,38 320,28 400,0 L 400,10 C 320,34 230,44 120,44 Z"
+                      fill="#7AA05A"
+                    />
+                    <path
+                      d="M 0,32 C 110,42 240,34 400,6"
+                      stroke="#7AA05A"
+                      strokeWidth="3.5"
+                      strokeLinecap="round"
+                    />
+
+                    {/* Inner / central dark green curved line (#2D5A4A from DR. logo) */}
+                    <path
+                      d="M 0,34 C 110,44 240,38 400,10"
+                      stroke="#2D5A4A"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </div>
+
               </div>
 
             </div>

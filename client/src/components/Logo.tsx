@@ -58,7 +58,7 @@ export const Logo: React.FC<LogoProps> = ({
         {showTagline && (
           <span
             className={`text-[7px] sm:text-[9px] font-bold tracking-[0.14em] sm:tracking-[0.18em] uppercase mt-0.5 sm:mt-1 whitespace-nowrap ${
-              isWhite ? "text-white/70" : isMonochrome ? "text-neutral-500" : isLightBg ? "text-neutral-500" : "text-neutral-400"
+              isWhite ? "text-white/70" : isMonochrome ? "text-neutral-500" : "text-black"
             }`}
           >
             {isMonochrome || isWhite ? "ADMIN OPERATIONS CONSOLE" : "ADVANCING HEALTHCARE GLOBALLY"}
