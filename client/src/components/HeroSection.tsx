@@ -80,6 +80,25 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
   const [cardsVisible, setCardsVisible] = useState(false);
   const cardsContainerRef = useRef<HTMLDivElement>(null);
 
+  // Exact matching width for Row 1 (ADVANCED + MEDICAL) and Row 3 (BETTER CARE + ECG LOGO)
+  const row1Ref = useRef<HTMLDivElement>(null);
+  const [row1Width, setRow1Width] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = row1Ref.current;
+    if (!el) return;
+    const updateWidth = () => {
+      const w = el.getBoundingClientRect().width;
+      if (w > 0) setRow1Width(w);
+    };
+    updateWidth();
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(updateWidth);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+  }, []);
+
   useEffect(() => {
     const node = cardsContainerRef.current;
     if (!node || typeof IntersectionObserver === "undefined") {
@@ -243,8 +262,11 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
 
             {/* Main Heading: Exactly THREE Lines */}
             <h1 className="text-3xl sm:text-4xl lg:text-[46px] xl:text-[50px] leading-[1.18] mb-3 sm:mb-4">
-              {/* Line 1: ADVANCED MEDICAL on first line */}
-              <span className="block tracking-[0.03em] whitespace-nowrap">
+              {/* Line 1: ADVANCED MEDICAL (defines the exact target width) */}
+              <div
+                ref={row1Ref}
+                className="w-fit inline-flex items-center gap-2 sm:gap-2.5 whitespace-nowrap tracking-[0.03em]"
+              >
                 <span className="font-extrabold not-italic text-black uppercase">
                   ADVANCED
                 </span>{" "}
@@ -257,32 +279,55 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                 >
                   MEDICAL
                 </span>
-              </span>
+              </div>
 
               {/* Line 2: Technology for entirely on the second line */}
               <span className="block font-light italic text-black tracking-[0.02em] mt-1 sm:mt-1.5">
                 Technology for
               </span>
 
-              {/* Line 3: BETTER CARE + RED ECG LOGO on the third line */}
-              <span className="inline-flex items-center flex-nowrap gap-2 sm:gap-3 mt-1 sm:mt-1.5">
+              {/* Line 3: BETTER CARE + RED ECG LOGO (matching Row 1 width with aligned edges) */}
+              <div
+                className="flex items-center justify-between gap-1.5 sm:gap-2.5 mt-1 sm:mt-1.5 max-w-full"
+                style={{
+                  width: row1Width ? `${row1Width}px` : "fit-content",
+                }}
+              >
                 <span
-                  className="font-black italic uppercase tracking-tight shrink-0"
-                  style={{ color: "#C62828" }}
+                  className="font-extrabold not-italic uppercase tracking-[0.01em] shrink-0"
+                  style={{ color: "#FD0000" }}
                 >
                   BETTER CARE
                 </span>
 
-                {/* DR.MEDEX Red ECG Pulse Logo: Noticeably larger, extending slightly above and below the text */}
-                <img
-                  src={redEcgPulseImage}
-                  alt=""
-                  aria-hidden="true"
-                  className="inline-block shrink-0 h-10 sm:h-12 lg:h-14 xl:h-15 w-auto max-w-[36vw] sm:max-w-none object-contain select-none -translate-y-0.5 pointer-events-none"
-                  loading="eager"
-                  decoding="async"
-                />
-              </span>
+                {/* DR.MEDEX Red ECG Pulse Logo with subtle breathing & sweep animation */}
+                <div className="relative flex items-center justify-end flex-1 min-w-0 ecg-animate-breathe overflow-hidden">
+                  {/* Base ECG Logo */}
+                  <img
+                    src={redEcgPulseImage}
+                    alt=""
+                    aria-hidden="true"
+                    className="block h-8 sm:h-10 lg:h-12 xl:h-13 w-auto max-w-full object-contain object-right select-none pointer-events-none"
+                    loading="eager"
+                    decoding="async"
+                  />
+
+                  {/* Moving light/sweep effect along the ECG pulse line */}
+                  <div
+                    className="absolute inset-0 pointer-events-none ecg-animate-sweep"
+                    style={{
+                      maskImage: `url("${redEcgPulseImage}")`,
+                      WebkitMaskImage: `url("${redEcgPulseImage}")`,
+                      maskSize: "contain",
+                      WebkitMaskSize: "contain",
+                      maskRepeat: "no-repeat",
+                      WebkitMaskRepeat: "no-repeat",
+                      maskPosition: "right center",
+                      WebkitMaskPosition: "right center",
+                    }}
+                  />
+                </div>
+              </div>
             </h1>
 
             {/* Supporting Tagline: Smaller, lighter, light MEDEX green (#7AA05A) */}

@@ -311,3 +311,60 @@
     transition: none !important;
   }
 }
+
+/* DR.MEDEX ECG Logo Animation: Subtle Breathing & Pulse Sweep */
+@keyframes ecgBreathing {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.018);
+  }
+}
+
+@keyframes ecgLightSweep {
+  0% {
+    transform: translateX(-110%);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.95;
+  }
+  55% {
+    opacity: 0.95;
+  }
+  75%, 100% {
+    transform: translateX(115%);
+    opacity: 0;
+  }
+}
+
+.ecg-animate-breathe {
+  animation: ecgBreathing 3.6s ease-in-out infinite;
+  transform-origin: right center;
+  will-change: transform;
+}
+
+.ecg-animate-sweep {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.05) 20%,
+    rgba(255, 255, 255, 0.95) 50%,
+    rgba(255, 215, 215, 0.6) 65%,
+    transparent 85%
+  );
+  animation: ecgLightSweep 3.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ecg-animate-breathe {
+    animation: none !important;
+    transform: none !important;
+  }
+  .ecg-animate-sweep {
+    animation: none !important;
+    display: none !important;
+  }
+}
