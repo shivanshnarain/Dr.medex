@@ -11,7 +11,8 @@
  * - Supports Application Default Credentials (ADC), FIREBASE_SERVICE_ACCOUNT_KEY (env), or FIREBASE_SERVICE_ACCOUNT_PATH.
  */
 
-const { getApps, initializeApp, cert, applicationDefault } = require("firebase-admin/app");
+const admin = require("firebase-admin");
+const { getApps, initializeApp, cert } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const path = require("path");
 const fs = require("fs");
@@ -25,12 +26,13 @@ let initError = null;
  */
 function getFirestoreDb() {
   if (firestoreDb) return firestoreDb;
-  if (initError && !process.env.FIREBASE_SERVICE_ACCOUNT_KEY && !process.env.FIREBASE_SERVICE_ACCOUNT_PATH && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  if (initError && !process.env.FIREBASE_SERVICE_ACCOUNT_KEY && !process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
     throw initError;
   }
   initError = null;
 
   try {
+    // 1. Reuse existing Firebase Admin app instance if already initialized (avoid duplicate initialization)
     const existingApps = getApps();
     if (existingApps.length > 0) {
       firestoreDb = getFirestore(existingApps[0]);
@@ -40,91 +42,108 @@ function getFirestoreDb() {
     const projectId = process.env.FIREBASE_PROJECT_ID || "drmedex";
     let credential = null;
 
-    // 1. Check for Service Account JSON string in environment variable (Preferred for Vercel/serverless production)
-    const envServiceAccountRaw =
-      process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
-      process.env.FIREBASE_SERVICE_ACCOUNT ||
-      process.env.FIREBASE_SERVICE_ACCOUNT_JSON ||
-      process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 ||
-      process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+    // 2. Primary & Sanctioned Method: FIREBASE_SERVICE_ACCOUNT_KEY (Single-line JSON string)
+    const envKeyRaw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 
-    if (envServiceAccountRaw) {
+    if (envKeyRaw && String(envKeyRaw).trim()) {
       try {
-        let rawKey = envServiceAccountRaw.trim();
-        // Support base64 encoded service account string
-        if (!rawKey.startsWith("{") && !rawKey.startsWith("[")) {
-          try {
-            const decoded = Buffer.from(rawKey, "base64").toString("utf8");
-            if (decoded.trim().startsWith("{")) {
-              rawKey = decoded.trim();
-            }
-          } catch (e) {}
-        }
-        // Handle optional outer quotes
+        let rawKey = String(envKeyRaw).trim();
+
+        // Handle optional outer quotes (single or double) from shell / env configurations
         if ((rawKey.startsWith('"') && rawKey.endsWith('"')) || (rawKey.startsWith("'") && rawKey.endsWith("'"))) {
           rawKey = rawKey.slice(1, -1).trim();
         }
-        const serviceAccount = JSON.parse(rawKey);
-        // Fix escaped newlines in private key if present
-        if (serviceAccount && typeof serviceAccount.private_key === "string" && serviceAccount.private_key.includes("\\n")) {
-          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
+
+        // Support base64-encoded service account string if passed
+        if (!rawKey.startsWith("{") && !rawKey.startsWith("[")) {
+          try {
+            const decoded = Buffer.from(rawKey, "base64").toString("utf8").trim();
+            let trimmedDecoded = decoded;
+            if ((trimmedDecoded.startsWith('"') && trimmedDecoded.endsWith('"')) || (trimmedDecoded.startsWith("'") && trimmedDecoded.endsWith("'"))) {
+              trimmedDecoded = trimmedDecoded.slice(1, -1).trim();
+            }
+            if (trimmedDecoded.startsWith("{")) {
+              rawKey = trimmedDecoded;
+            }
+          } catch (e) {}
         }
-        credential = cert(serviceAccount);
+
+        // Handle escaped quotes if JSON was escaped as a string literal (e.g. {\"type\":\"service_account\"...})
+        if (rawKey.startsWith('{\\"') || rawKey.startsWith("{\\'") || rawKey.includes('\\"')) {
+          try {
+            const unescaped = rawKey.replace(/\\"/g, '"').replace(/\\'/g, "'");
+            if (unescaped.startsWith("{")) {
+              rawKey = unescaped;
+            }
+          } catch (e) {}
+        }
+
+        const serviceAccount = JSON.parse(rawKey);
+        if (!serviceAccount || typeof serviceAccount !== "object") {
+          throw new Error("Parsed credential is not a JSON object.");
+        }
+
+        // Validate required fields
+        if (!serviceAccount.project_id) {
+          throw new Error("Missing required field 'project_id'.");
+        }
+        if (!serviceAccount.client_email) {
+          throw new Error("Missing required field 'client_email'.");
+        }
+        if (!serviceAccount.private_key) {
+          throw new Error("Missing required field 'private_key'.");
+        }
+
+        // Normalize private key: correctly handle escaped newline characters (\n)
+        let privateKey = String(serviceAccount.private_key || "").trim();
+        if ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
+          privateKey = privateKey.slice(1, -1).trim();
+        }
+        if (privateKey.includes("\\n")) {
+          privateKey = privateKey.replace(/\\n/g, "\n");
+        }
+        serviceAccount.private_key = privateKey;
+
+        // Initialize using admin.credential.cert() or cert()
+        credential = (admin.credential && typeof admin.credential.cert === "function")
+          ? admin.credential.cert(serviceAccount)
+          : cert(serviceAccount);
       } catch (parseErr) {
-        throw new Error("Invalid JSON in FIREBASE_SERVICE_ACCOUNT_KEY environment variable.");
+        throw new Error(`Invalid JSON in FIREBASE_SERVICE_ACCOUNT_KEY environment variable: ${parseErr.message}`);
       }
     }
-    // 2. Check for individual environment variables (Client Email + Private Key)
-    else if (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
-      const privateKey = process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n");
-      credential = cert({
-        projectId: process.env.FIREBASE_PROJECT_ID || projectId,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey
-      });
-    }
-    // 3. Check for Service Account Key Path on disk
-    else if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH || process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-      const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    // 3. Backward-compatibility test support if legacy path is explicitly passed in a test harness
+    else if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+      const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
       const resolvedPath = path.isAbsolute(serviceAccountPath)
         ? serviceAccountPath
         : path.resolve(process.cwd(), serviceAccountPath);
 
       if (fs.existsSync(resolvedPath)) {
-        const serviceAccount = JSON.parse(fs.readFileSync(resolvedPath, "utf8"));
-        if (serviceAccount && typeof serviceAccount.private_key === "string" && serviceAccount.private_key.includes("\\n")) {
-          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
+        const rawContent = fs.readFileSync(resolvedPath, "utf8");
+        const serviceAccount = JSON.parse(rawContent);
+        if (serviceAccount && typeof serviceAccount.private_key === "string") {
+          let pk = serviceAccount.private_key.trim();
+          if ((pk.startsWith('"') && pk.endsWith('"')) || (pk.startsWith("'") && pk.endsWith("'"))) {
+            pk = pk.slice(1, -1).trim();
+          }
+          if (pk.includes("\\n")) {
+            pk = pk.replace(/\\n/g, "\n");
+          }
+          serviceAccount.private_key = pk;
         }
-        credential = cert(serviceAccount);
+        credential = (admin.credential && typeof admin.credential.cert === "function")
+          ? admin.credential.cert(serviceAccount)
+          : cert(serviceAccount);
       } else {
         throw new Error(`Firebase service account file not found at: ${resolvedPath}`);
       }
-    }
-    // 4. Attempt Application Default Credentials (ADC)
-    else {
-      const defaultAdcPath = path.join(
-        process.env.HOME || process.env.USERPROFILE || "",
-        ".config/gcloud/application_default_credentials.json"
+    } else {
+      throw new Error(
+        "Cloud Firestore Admin credentials are not configured on the server. " +
+        "Missing FIREBASE_SERVICE_ACCOUNT_KEY environment variable. " +
+        "Please configure the complete Service Account JSON in FIREBASE_SERVICE_ACCOUNT_KEY."
       );
-      const isGcpEnvironment = Boolean(process.env.K_SERVICE || process.env.GAE_SERVICE || process.env.GOOGLE_CLOUD_PROJECT);
-
-      if (!isGcpEnvironment && !fs.existsSync(defaultAdcPath)) {
-        throw new Error(
-          "Cloud Firestore Admin credentials are not configured on the server. " +
-          "Please configure a Service Account credential via FIREBASE_SERVICE_ACCOUNT_KEY, " +
-          "FIREBASE_SERVICE_ACCOUNT_PATH, or configure Application Default Credentials (ADC)."
-        );
-      }
-
-      try {
-        credential = applicationDefault();
-      } catch (adcErr) {
-        throw new Error(
-          "Cloud Firestore Admin credentials are not configured on the server. " +
-          "Please configure a Service Account credential via FIREBASE_SERVICE_ACCOUNT_KEY, " +
-          "FIREBASE_SERVICE_ACCOUNT_PATH, or configure Application Default Credentials (ADC)."
-        );
-      }
     }
 
     const app = initializeApp({
