@@ -324,12 +324,12 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                 })}
               </div>
 
-              {/* LARGE MAIN IMAGE (TO THE RIGHT OF THUMBNAILS): FULL-FRAME BORDERLESS ON MOBILE */}
+              {/* LARGE MAIN IMAGE: FULL NATURAL 1199x1312 ASPECT RATIO ON MOBILE */}
               <div
                 onClick={() => setIsMainCardZoomed((prev) => !prev)}
                 onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
-                className="relative z-0 flex-1 w-full rounded-none sm:rounded-2xl overflow-hidden group min-h-[260px] sm:min-h-[420px] lg:min-h-[460px] xl:min-h-[480px] aspect-[4/3] sm:aspect-auto select-none cursor-pointer border-0 shadow-none"
+                className="relative z-0 flex-1 w-full rounded-none sm:rounded-2xl overflow-hidden group w-full aspect-[1199/1312] sm:aspect-auto sm:min-h-[420px] lg:min-h-[460px] xl:min-h-[480px] select-none cursor-pointer border-0 shadow-none"
                 title="Click to toggle image zoom"
               >
                 {/* Mobile: Horizontal slide track with transform; Desktop: static/absolute crossfade stack */}
@@ -353,7 +353,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                         <img
                           src={slide.imageUrl}
                           alt={slide.categoryLabel}
-                          className={`w-full h-full object-cover select-none rounded-none sm:rounded-2xl transition-transform duration-500 ease-out ${
+                          className={`w-full h-full object-contain sm:object-cover select-none rounded-none sm:rounded-2xl transition-transform duration-500 ease-out ${
                             isCurrentSlideZoomed
                               ? "scale-105"
                               : "scale-100 sm:group-hover:scale-105"
@@ -400,7 +400,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
 
                 {/* View Category Pill CTA (Part C: All screen sizes) */}
                 <div
-                  className="absolute bottom-7 left-4 sm:bottom-6 sm:left-6 z-20"
+                  className="absolute bottom-14 left-4 sm:bottom-6 sm:left-6 z-20"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Link
@@ -419,9 +419,9 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                   </Link>
                 </div>
 
-                {/* Carousel Navigation Dots with Glowing Outline (Part A.3 & Part F: All screen sizes) */}
+                {/* Carousel Navigation Dots: INSIDE the image immediately above the curved border */}
                 <div
-                  className="absolute bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center gap-2 select-none"
+                  className="absolute bottom-12 sm:bottom-5 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center gap-2 select-none"
                   aria-label="Slideshow position indicator"
                   role="tablist"
                   onClick={(e) => e.stopPropagation()}
@@ -453,10 +453,10 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                   })}
                 </div>
 
-                {/* MOBILE ONLY: HERO CAROUSEL BOTTOM CURVE & LAYERED WHITE/DUAL-GREEN BORDER */}
-                <div className="absolute bottom-0 left-0 right-0 w-full h-[62px] pointer-events-none z-10 block sm:hidden overflow-hidden">
+                {/* MOBILE ONLY: HERO CAROUSEL BOTTOM CURVE & LAYERED WHITE/DUAL-GREEN BORDER OVERLAY */}
+                <div className="absolute bottom-0 left-0 right-0 w-full h-[48px] pointer-events-none z-10 block sm:hidden overflow-hidden">
                   <svg
-                    viewBox="0 0 1000 140"
+                    viewBox="0 0 1000 100"
                     preserveAspectRatio="none"
                     className="w-full h-full"
                     fill="none"
@@ -472,23 +472,23 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                       </linearGradient>
                     </defs>
 
-                    {/* 3. Solid pure white fill below the green band covering bottom edge into section background */}
+                    {/* 3. Solid pure white fill below the green band transitioning into section background */}
                     <path
-                      d="M 0,83 C 350,96 650,97 1000,64 L 1000,140 L 0,140 Z"
+                      d="M 0,100 C 280,96 460,94 680,90 C 840,74 930,56 1000,42 L 1000,100 L 0,100 Z"
                       fill="#FFFFFF"
                     />
 
-                    {/* 2. Continuous curved green band: wider at both edges, thinner in the middle, smooth brand gradient */}
+                    {/* 2. Continuous curved green band: thicker at edges, thinner in center, dual-green gradient */}
                     <path
-                      d="M 0,59 C 350,85 650,73 1000,30 L 1000,64 C 650,97 350,96 0,83 Z"
+                      d="M 0,74 C 280,86 460,84 680,70 C 840,50 930,26 1000,12 L 1000,42 C 930,56 840,74 680,90 C 460,94 280,96 0,100 Z"
                       fill="url(#mobileGreenBandGrad)"
                     />
 
                     {/* 1. Clean white separator/border immediately above the green strip */}
                     <path
-                      d="M 0,56 C 350,83 650,71 1000,28"
+                      d="M 0,72 C 280,84 460,82 680,68 C 840,48 930,24 1000,10"
                       stroke="#FFFFFF"
-                      strokeWidth="6"
+                      strokeWidth="5"
                       strokeLinecap="round"
                     />
                   </svg>
