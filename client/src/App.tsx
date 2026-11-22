@@ -12,44 +12,61 @@ import { CartDrawer } from "./components/CartDrawer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { PushNotificationPrompt } from "./components/PushNotificationPrompt";
 
-// Route-level code splitting for fast initial bundle loading
-const HomePage = lazy(() => import("./pages/HomePage").then((m) => ({ default: m.HomePage })));
-const ShopPage = lazy(() => import("./pages/ShopPage").then((m) => ({ default: m.ShopPage })));
-const ProductDetailPage = lazy(() => import("./pages/ProductDetailPage").then((m) => ({ default: m.ProductDetailPage })));
-const CartPage = lazy(() => import("./pages/CartPage").then((m) => ({ default: m.CartPage })));
-const CheckoutPage = lazy(() => import("./pages/CheckoutPage").then((m) => ({ default: m.CheckoutPage })));
-const TrackOrderPage = lazy(() => import("./pages/TrackOrderPage").then((m) => ({ default: m.TrackOrderPage })));
-const AccountPage = lazy(() => import("./pages/AccountPage").then((m) => ({ default: m.AccountPage })));
-const RequestQuotePage = lazy(() => import("./pages/RequestQuotePage").then((m) => ({ default: m.RequestQuotePage })));
-const WorldwideNetworkPage = lazy(() => import("./pages/WorldwideNetworkPage").then((m) => ({ default: m.WorldwideNetworkPage })));
-const CountryPage = lazy(() => import("./pages/CountryPage").then((m) => ({ default: m.CountryPage })));
-const AboutPage = lazy(() => import("./pages/AboutPage").then((m) => ({ default: m.AboutPage })));
-const WishlistPage = lazy(() => import("./pages/WishlistPage").then((m) => ({ default: m.WishlistPage })));
-const BlogListPage = lazy(() => import("./pages/BlogListPage").then((m) => ({ default: m.BlogListPage })));
-const BlogDetailPage = lazy(() => import("./pages/BlogDetailPage").then((m) => ({ default: m.BlogDetailPage })));
-const ContactPage = lazy(() => import("./pages/ContactPage").then((m) => ({ default: m.ContactPage })));
-const PolicyPage = lazy(() => import("./pages/PolicyPage").then((m) => ({ default: m.PolicyPage })));
+import { HomePage } from "./pages/HomePage";
+
+// Safe lazy chunk loader with auto-retry to prevent transient chunk 404 / network errors
+function safeLazy<T extends React.ComponentType<any>>(
+  importer: () => Promise<{ default: T }>
+) {
+  return lazy(async () => {
+    try {
+      return await importer();
+    } catch (err) {
+      console.warn("[App] Lazy chunk fetch notice, retrying...", err);
+      // Brief pause and one automatic retry before failing
+      await new Promise((r) => setTimeout(r, 300));
+      return await importer();
+    }
+  });
+}
+
+// Route-level code splitting for fast bundle loading
+const ShopPage = safeLazy(() => import("./pages/ShopPage").then((m) => ({ default: m.ShopPage })));
+const ProductDetailPage = safeLazy(() => import("./pages/ProductDetailPage").then((m) => ({ default: m.ProductDetailPage })));
+const CartPage = safeLazy(() => import("./pages/CartPage").then((m) => ({ default: m.CartPage })));
+const CheckoutPage = safeLazy(() => import("./pages/CheckoutPage").then((m) => ({ default: m.CheckoutPage })));
+const TrackOrderPage = safeLazy(() => import("./pages/TrackOrderPage").then((m) => ({ default: m.TrackOrderPage })));
+const AccountPage = safeLazy(() => import("./pages/AccountPage").then((m) => ({ default: m.AccountPage })));
+const RequestQuotePage = safeLazy(() => import("./pages/RequestQuotePage").then((m) => ({ default: m.RequestQuotePage })));
+const WorldwideNetworkPage = safeLazy(() => import("./pages/WorldwideNetworkPage").then((m) => ({ default: m.WorldwideNetworkPage })));
+const CountryPage = safeLazy(() => import("./pages/CountryPage").then((m) => ({ default: m.CountryPage })));
+const AboutPage = safeLazy(() => import("./pages/AboutPage").then((m) => ({ default: m.AboutPage })));
+const WishlistPage = safeLazy(() => import("./pages/WishlistPage").then((m) => ({ default: m.WishlistPage })));
+const BlogListPage = safeLazy(() => import("./pages/BlogListPage").then((m) => ({ default: m.BlogListPage })));
+const BlogDetailPage = safeLazy(() => import("./pages/BlogDetailPage").then((m) => ({ default: m.BlogDetailPage })));
+const ContactPage = safeLazy(() => import("./pages/ContactPage").then((m) => ({ default: m.ContactPage })));
+const PolicyPage = safeLazy(() => import("./pages/PolicyPage").then((m) => ({ default: m.PolicyPage })));
 
 // Customer Authentication Pages (Supabase Auth)
-const ForgotPasswordPage = lazy(() => import("./pages/account/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage })));
-const ResetPasswordPage = lazy(() => import("./pages/account/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
+const ForgotPasswordPage = safeLazy(() => import("./pages/account/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage })));
+const ResetPasswordPage = safeLazy(() => import("./pages/account/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
 
 // Admin Pages (loaded strictly on-demand when visiting /admin)
-const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage").then((m) => ({ default: m.AdminDashboardPage })));
-const AdminProductsPage = lazy(() => import("./pages/AdminProductsPage").then((m) => ({ default: m.AdminProductsPage })));
-const AdminProductEditorPage = lazy(() => import("./pages/AdminProductEditorPage").then((m) => ({ default: m.AdminProductEditorPage })));
-const AdminCategoriesPage = lazy(() => import("./pages/AdminCategoriesPage").then((m) => ({ default: m.AdminCategoriesPage })));
-const AdminOrdersPage = lazy(() => import("./pages/AdminOrdersPage").then((m) => ({ default: m.AdminOrdersPage })));
-const AdminReviewsPage = lazy(() => import("./pages/AdminReviewsPage").then((m) => ({ default: m.AdminReviewsPage })));
-const AdminCustomersPage = lazy(() => import("./pages/AdminCustomersPage").then((m) => ({ default: m.AdminCustomersPage })));
-const AdminNotificationsPage = lazy(() => import("./pages/AdminNotificationsPage").then((m) => ({ default: m.AdminNotificationsPage })));
-const AdminStorageManagementPage = lazy(() => import("./pages/AdminStorageManagementPage").then((m) => ({ default: m.AdminStorageManagementPage })));
-const AdminProductConfigPage = lazy(() => import("./pages/AdminSystemPages").then((m) => ({ default: m.AdminProductConfigPage })));
-const AdminMediaLibraryPage = lazy(() => import("./pages/AdminSystemPages").then((m) => ({ default: m.AdminMediaLibraryPage })));
-const AdminWebsiteContentPage = lazy(() => import("./pages/AdminSystemPages").then((m) => ({ default: m.AdminWebsiteContentPage })));
-const AdminSettingsPage = lazy(() => import("./pages/AdminSystemPages").then((m) => ({ default: m.AdminSettingsPage })));
-const AdminAuditTrailPage = lazy(() => import("./pages/AdminSystemPages").then((m) => ({ default: m.AdminAuditTrailPage })));
-const AdminPayPalHealthPage = lazy(() => import("./pages/AdminPayPalHealthPage").then((m) => ({ default: m.AdminPayPalHealthPage })));
+const AdminDashboardPage = safeLazy(() => import("./pages/AdminDashboardPage").then((m) => ({ default: m.AdminDashboardPage })));
+const AdminProductsPage = safeLazy(() => import("./pages/AdminProductsPage").then((m) => ({ default: m.AdminProductsPage })));
+const AdminProductEditorPage = safeLazy(() => import("./pages/AdminProductEditorPage").then((m) => ({ default: m.AdminProductEditorPage })));
+const AdminCategoriesPage = safeLazy(() => import("./pages/AdminCategoriesPage").then((m) => ({ default: m.AdminCategoriesPage })));
+const AdminOrdersPage = safeLazy(() => import("./pages/AdminOrdersPage").then((m) => ({ default: m.AdminOrdersPage })));
+const AdminReviewsPage = safeLazy(() => import("./pages/AdminReviewsPage").then((m) => ({ default: m.AdminReviewsPage })));
+const AdminCustomersPage = safeLazy(() => import("./pages/AdminCustomersPage").then((m) => ({ default: m.AdminCustomersPage })));
+const AdminNotificationsPage = safeLazy(() => import("./pages/AdminNotificationsPage").then((m) => ({ default: m.AdminNotificationsPage })));
+const AdminStorageManagementPage = safeLazy(() => import("./pages/AdminStorageManagementPage").then((m) => ({ default: m.AdminStorageManagementPage })));
+const AdminProductConfigPage = safeLazy(() => import("./pages/AdminSystemPages").then((m) => ({ default: m.AdminProductConfigPage })));
+const AdminMediaLibraryPage = safeLazy(() => import("./pages/AdminSystemPages").then((m) => ({ default: m.AdminMediaLibraryPage })));
+const AdminWebsiteContentPage = safeLazy(() => import("./pages/AdminSystemPages").then((m) => ({ default: m.AdminWebsiteContentPage })));
+const AdminSettingsPage = safeLazy(() => import("./pages/AdminSystemPages").then((m) => ({ default: m.AdminSettingsPage })));
+const AdminAuditTrailPage = safeLazy(() => import("./pages/AdminSystemPages").then((m) => ({ default: m.AdminAuditTrailPage })));
+const AdminPayPalHealthPage = safeLazy(() => import("./pages/AdminPayPalHealthPage").then((m) => ({ default: m.AdminPayPalHealthPage })));
 
 function PageLoader() {
   return (

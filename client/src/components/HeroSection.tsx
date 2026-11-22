@@ -148,12 +148,22 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
 
   // Touch swipe gesture handlers for mobile showcase
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (!e.touches || !e.touches[0]) return;
     touchStartXRef.current = e.touches[0].clientX;
     touchStartYRef.current = e.touches[0].clientY;
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartXRef.current === null || touchStartYRef.current === null) return;
+    if (
+      touchStartXRef.current === null ||
+      touchStartYRef.current === null ||
+      !e.changedTouches ||
+      !e.changedTouches[0]
+    ) {
+      touchStartXRef.current = null;
+      touchStartYRef.current = null;
+      return;
+    }
     const deltaX = e.changedTouches[0].clientX - touchStartXRef.current;
     const deltaY = e.changedTouches[0].clientY - touchStartYRef.current;
     touchStartXRef.current = null;
@@ -179,13 +189,17 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
     };
   }, []);
 
-  const activeSlide = HERO_CATEGORY_SLIDES[activeIndex];
+  const safeActiveIndex =
+    typeof activeIndex === "number" && activeIndex >= 0 && activeIndex < HERO_CATEGORY_SLIDES.length
+      ? activeIndex
+      : 0;
+  const activeSlide = HERO_CATEGORY_SLIDES[safeActiveIndex] || HERO_CATEGORY_SLIDES[0];
 
   // Exactly 3 secondary images displayed beside main image on desktop/tablet, cycling sequentially
   const secondaryIndices = [
-    (activeIndex + 1) % HERO_CATEGORY_SLIDES.length,
-    (activeIndex + 2) % HERO_CATEGORY_SLIDES.length,
-    (activeIndex + 3) % HERO_CATEGORY_SLIDES.length,
+    (safeActiveIndex + 1) % HERO_CATEGORY_SLIDES.length,
+    (safeActiveIndex + 2) % HERO_CATEGORY_SLIDES.length,
+    (safeActiveIndex + 3) % HERO_CATEGORY_SLIDES.length,
   ];
 
   return (
@@ -205,73 +219,42 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
               <span>TRUSTED MEDICAL EQUIPMENT PARTNER</span>
             </div>
 
-            {/* Main Heading: Matching Reference Image 2 exact typography and styling */}
-            <h1 className="text-4xl sm:text-5xl lg:text-[52px] xl:text-[56px] leading-[1.12] mb-5 sm:mb-6">
-              {/* 1. ADVANCED: Black text, thin elegant italic typography */}
-              <span className="block font-light italic text-black tracking-tight">
-                Advanced
+            {/* Main Heading: Line 1: Advanced Medical | Line 2: Technology for Better Care + ECG */}
+            <h1 className="text-3xl sm:text-4xl lg:text-[46px] xl:text-[50px] leading-[1.15] mb-4 sm:mb-5">
+              {/* Line 1: Advanced Medical on one single line */}
+              <span className="block font-light italic text-black tracking-tight whitespace-nowrap">
+                Advanced{" "}
+                <span className="font-extrabold italic text-black">Medical</span>
               </span>
 
-              {/* 2. MEDICAL: Bold italic typography, white text inside rounded rectangular brand gradient badge */}
-              <span className="inline-block my-1 sm:my-1.5">
+              {/* Line 2: Technology for Better Care + ECG */}
+              <span className="inline-flex items-center flex-wrap gap-2 sm:gap-2.5 mt-1 sm:mt-1.5">
+                <span className="font-light italic text-black tracking-tight">
+                  Technology for
+                </span>{" "}
                 <span
-                  className="inline-flex items-center justify-center px-4 sm:px-6 py-0.5 sm:py-1 rounded-xl sm:rounded-2xl font-black italic text-white tracking-tight shadow-sm"
-                  style={{
-                    background:
-                      "linear-gradient(90deg, #7AA05A 0%, #2D5A4A 50%, #7AA05A 100%)",
-                  }}
-                >
-                  Medical
-                </span>
-              </span>
-
-              {/* 3. TECHNOLOGY FOR: Black text, elegant italic typography */}
-              <span className="block font-light italic text-black tracking-tight">
-                Technology for
-              </span>
-
-              {/* 4. BETTER CARE + 5. SUPPLIED TRANSPARENT ECG HEARTBEAT IMAGE */}
-              <span className="inline-flex items-center flex-wrap gap-2 sm:gap-2.5 mt-0.5">
-                <span
-                  className="font-black italic text-[#7AA05A] tracking-tight shrink-0"
-                  style={{ color: "#7AA05A" }}
+                  className="font-black italic tracking-tight shrink-0"
+                  style={{ color: "#C84A4A" }}
                 >
                   Better Care
                 </span>
 
-                {/* 5. ECG Waveform Image: Direct supplied transparent asset */}
+                {/* 5. DR.MEDEX Green Glowing ECG Pulse Logo Asset */}
                 <img
                   src={ecgPulseImage}
                   alt=""
                   aria-hidden="true"
-                  className="inline-block shrink-0 h-6 sm:h-7 lg:h-8 xl:h-9 w-auto max-w-[28vw] sm:max-w-none object-contain select-none -translate-y-0.5 sm:-translate-y-1 pointer-events-none"
+                  className="inline-block shrink-0 h-6 sm:h-7 lg:h-8 xl:h-8.5 w-auto max-w-[28vw] sm:max-w-none object-contain select-none -translate-y-0.5 sm:-translate-y-1 pointer-events-none"
                   loading="eager"
                   decoding="async"
                 />
               </span>
             </h1>
 
-            {/* Supporting Description */}
-            <p className="text-sm sm:text-base lg:text-[17px] text-[#333333] leading-relaxed font-normal max-w-md mb-7 sm:mb-8">
-              Precision-engineered medical equipment for hospitals, clinics and healthcare professionals worldwide.
+            {/* Supporting Tagline */}
+            <p className="text-base sm:text-lg text-[#333333] font-medium tracking-tight mb-2 sm:mb-3">
+              Reliable Equipment. Better Care.
             </p>
-
-            {/* Explore Products CTA Button */}
-            <div>
-              <Link
-                to="/shop-all"
-                className="group/cta inline-flex items-center gap-2.5 sm:gap-3 px-5 sm:px-6 py-2 sm:py-2.5 rounded-full bg-white text-black font-bold text-sm sm:text-base border border-neutral-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.12)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition-all duration-200 hover:scale-[1.02] cursor-pointer"
-                style={{ backgroundColor: "#FFFFFF", color: "#000000" }}
-              >
-                <span className="text-black font-bold">Explore Products</span>
-                <span
-                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center shrink-0 -translate-y-[1px] transition-transform duration-200 group-hover/cta:translate-x-0.5"
-                  style={{ backgroundColor: "#7AA05A" }}
-                >
-                  <ArrowRight size={13} className="text-white" strokeWidth={2.5} />
-                </span>
-              </Link>
-            </div>
           </div>
 
           {/* RIGHT COLUMN: MEDICAL PRODUCT IMAGE SHOWCASE (ON THE RIGHT) */}
@@ -385,24 +368,18 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                   </span>
                 </div>
 
-                {/* Explore Products Pill CTA: Shifted upward for clear gap above dots, horizontally balanced */}
+                {/* Explore Products CTA: Minimalist white text & arrow with subtle float animation and drop shadow for legibility */}
                 <div
-                  className="absolute bottom-9 left-3.5 sm:bottom-9 sm:left-6 z-20"
+                  className="absolute bottom-9 left-4 sm:bottom-9 sm:left-6 z-20 animate-hero-float"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Link
                     to={activeSlide.categoryPath}
-                    className="group/cta inline-flex items-center gap-2 sm:gap-2.5 px-3.5 py-1 sm:px-4 sm:py-1.5 rounded-full bg-white text-black font-bold text-xs sm:text-sm shadow-[0_4px_16px_rgba(0,0,0,0.22)] hover:shadow-[0_6px_22px_rgba(0,0,0,0.3)] transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] select-none"
-                    style={{ backgroundColor: "#FFFFFF", color: "#000000" }}
+                    className="group/cta inline-flex items-center gap-2 text-white font-bold text-xs sm:text-sm drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)] hover:text-white/90 transition-transform duration-200 hover:scale-105 active:scale-95 select-none"
                     aria-label={`Explore ${activeSlide.categoryLabel}`}
                   >
-                    <span className="font-bold tracking-tight text-black leading-none">Explore Products</span>
-                    <span
-                      className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center shrink-0 -translate-y-[1px] transition-transform duration-200 group-hover/cta:translate-x-0.5"
-                      style={{ backgroundColor: "#7AA05A" }}
-                    >
-                      <ArrowRight size={11} className="text-white" strokeWidth={2.5} />
-                    </span>
+                    <span className="font-bold tracking-tight text-white leading-none">Explore Products</span>
+                    <ArrowRight size={14} className="text-white shrink-0 transition-transform duration-200 group-hover/cta:translate-x-1" strokeWidth={2.5} />
                   </Link>
                 </div>
 

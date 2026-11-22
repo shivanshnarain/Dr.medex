@@ -118,14 +118,22 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (selected) {
       setCurrentCountryState(selected);
       setCurrentCurrencyState(selected.currency);
-      localStorage.setItem("drmedex_country", selected.code);
-      localStorage.setItem("drmedex_currency", selected.currency);
+      try {
+        localStorage.setItem("drmedex_country", selected.code);
+        localStorage.setItem("drmedex_currency", selected.currency);
+      } catch (err) {
+        console.warn("[CurrencyContext] Failed to save country:", err);
+      }
     }
   };
 
   const setCurrencyManually = (currencyCode: string) => {
     setCurrentCurrencyState(currencyCode);
-    localStorage.setItem("drmedex_currency", currencyCode);
+    try {
+      localStorage.setItem("drmedex_currency", currencyCode);
+    } catch (err) {
+      console.warn("[CurrencyContext] Failed to save currency:", err);
+    }
   };
 
   const convertPrice = (inrAmount: number): number => {

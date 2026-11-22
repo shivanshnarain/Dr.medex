@@ -8,6 +8,7 @@ import { B2BQuoteModal } from "../components/B2BQuoteModal";
 import { HeroSection } from "../components/HeroSection";
 import { ServiceBenefitsBanner } from "../components/Footer";
 import { getProducts, getCachedProductsSync } from "../services/productService";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 
 const CANONICAL_CATEGORY_MAP: Record<string, string[]> = {
   "electrosurgical": [
@@ -104,6 +105,7 @@ const CANONICAL_CATEGORY_MAP: Record<string, string[]> = {
 };
 
 function matchProductCategory(product: Product, categorySlugOrId: string): boolean {
+  if (!product || typeof product !== "object") return false;
   if (!categorySlugOrId) return true;
   const target = categorySlugOrId.toLowerCase().trim();
   const allowed = CANONICAL_CATEGORY_MAP[target] || [target];
@@ -205,8 +207,11 @@ export const HomePage: React.FC = () => {
 
   // Filter products by selected category (only published/active/correct products)
   const filteredProducts = useMemo(() => {
+    if (!Array.isArray(allProducts)) return [];
     let list = allProducts.filter(
       (p) =>
+        p &&
+        typeof p === "object" &&
         (p.status || "ACTIVE") === "ACTIVE" &&
         p.status !== "ARCHIVED" &&
         !p.isRetired &&
@@ -284,20 +289,24 @@ export const HomePage: React.FC = () => {
 
   return (
     <div className="w-full bg-white">
-      {/* 1. HERO SECTION (TOP PRIORITY) */}
-      <HeroSection
-        onOpenQuote={(productTitle?: string) => {
-          const match = productTitle
-            ? allProducts.find((p) => p.title.toLowerCase().includes(productTitle.toLowerCase())) || allProducts[0]
-            : allProducts[0];
-          setQuoteProduct(match || null);
-          setIsQuoteModalOpen(true);
-        }}
-        onQuickView={(productId?: string) => {
-          const match = allProducts.find((p) => p.id === productId) || allProducts[0];
-          if (match) setQuickViewProduct(match);
-        }}
-      />
+      {/* 1. HERO SECTION (TOP PRIORITY) WITH ISOLATED ERROR BOUNDARY */}
+      <ErrorBoundary fallbackTitle="Medical Equipment Showcase" fallbackMessage="The hero showcase is currently refreshing. You can explore our complete medical equipment catalogue below.">
+        <HeroSection
+          onOpenQuote={(productTitle?: string) => {
+            const match = productTitle && Array.isArray(allProducts)
+              ? allProducts.find((p) => p?.title && p.title.toLowerCase().includes(productTitle.toLowerCase())) || allProducts[0]
+              : allProducts[0];
+            setQuoteProduct(match || null);
+            setIsQuoteModalOpen(true);
+          }}
+          onQuickView={(productId?: string) => {
+            const match = productId && Array.isArray(allProducts)
+              ? allProducts.find((p) => (p?.id && p.id === productId) || ((p as any)?._id && (p as any)._id === productId)) || allProducts[0]
+              : allProducts[0];
+            if (match) setQuickViewProduct(match);
+          }}
+        />
+      </ErrorBoundary>
 
       {/* 2. OUR PRODUCTS — SINGLE CONTINUOUS CATALOGUE */}
       <section id="catalogue" className="py-12 sm:py-16 bg-white scroll-mt-20" aria-label="Explore Our Medical Equipment">

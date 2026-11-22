@@ -257,7 +257,7 @@
 }
 
 .animate-hero-float {
-  animation: heroFloat 3.5s ease-in-out infinite;
+  animation: heroFloat 2.5s ease-in-out infinite;
   will-change: transform;
 }
 

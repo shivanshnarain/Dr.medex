@@ -21,7 +21,11 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   });
 
   useEffect(() => {
-    localStorage.setItem("drmedex_wishlist", JSON.stringify(wishlist));
+    try {
+      localStorage.setItem("drmedex_wishlist", JSON.stringify(wishlist));
+    } catch (err) {
+      console.warn("[WishlistContext] Failed to persist wishlist:", err);
+    }
   }, [wishlist]);
 
   const toggleWishlist = (product: Product) => {
