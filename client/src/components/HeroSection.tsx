@@ -195,7 +195,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
       <div className="max-w-[1400px] w-full mx-auto px-0 sm:px-6 lg:px-8">
         {/* TWO-COLUMN HERO SECTION: TEXT ON LEFT, SHOWCASE ON RIGHT */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-8 lg:gap-10 xl:gap-12 items-center">
-          
+
           {/* LEFT COLUMN: HERO CONTENT (ON THE LEFT) */}
           <div className="lg:col-span-5 flex flex-col items-start order-2 lg:order-1 px-4 sm:px-0">
             {/* Eyebrow text with dark-green text and matching dark-green dot */}
@@ -211,13 +211,12 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                 Advanced
               </span>
 
-              {/* 2. MEDICAL: Bold italic typography, white text inside rounded rectangular green gradient highlight */}
+              {/* 2. MEDICAL: Bold italic typography, white text inside rounded rectangular green highlight matching Reference Image 2 */}
               <span className="inline-block my-1 sm:my-1.5">
                 <span
                   className="inline-flex items-center justify-center px-4 sm:px-6 py-0.5 sm:py-1 rounded-xl sm:rounded-2xl font-black italic text-white tracking-tight shadow-sm"
                   style={{
-                    background:
-                      "linear-gradient(90deg, #7AA05A 0%, #2D5A4A 45%, #2D5A4A 55%, #7AA05A 100%)",
+                    backgroundColor: "#7AA05A",
                   }}
                 >
                   Medical
@@ -267,19 +266,19 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
               Precision-engineered medical equipment for hospitals, clinics and healthcare professionals worldwide.
             </p>
 
-            {/* View Category CTA Button */}
+            {/* Explore Products CTA Button */}
             <div>
               <Link
                 to="/shop-all"
-                className="group/cta inline-flex items-center gap-3 px-6 sm:px-7 py-3 sm:py-3.5 rounded-full bg-white text-black font-bold text-sm sm:text-base border border-neutral-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.12)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition-all duration-200 hover:scale-[1.02] cursor-pointer"
+                className="group/cta inline-flex items-center gap-2.5 sm:gap-3 px-5 sm:px-6 py-2 sm:py-2.5 rounded-full bg-white text-black font-bold text-sm sm:text-base border border-neutral-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.12)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition-all duration-200 hover:scale-[1.02] cursor-pointer"
                 style={{ backgroundColor: "#FFFFFF", color: "#000000" }}
               >
-                <span className="text-black font-bold">View Category</span>
+                <span className="text-black font-bold">Explore Products</span>
                 <span
-                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 transition-transform duration-200 group-hover/cta:translate-x-0.5"
+                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center shrink-0 -translate-y-[1px] transition-transform duration-200 group-hover/cta:translate-x-0.5"
                   style={{ backgroundColor: "#7AA05A" }}
                 >
-                  <ArrowRight size={15} className="text-white" strokeWidth={2.5} />
+                  <ArrowRight size={13} className="text-white" strokeWidth={2.5} />
                 </span>
               </Link>
             </div>
@@ -292,7 +291,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
             onMouseLeave={() => setIsHovered(false)}
           >
             <div className="flex flex-col sm:flex-row gap-0 sm:gap-6 md:gap-7 lg:gap-8 items-stretch">
-              
+
               {/* THREE SECONDARY THUMBNAILS: HIDDEN ON MOBILE PHONES, VISIBLE ON SM AND UP */}
               <div className="relative z-10 hidden sm:flex sm:flex-col gap-2.5 sm:gap-3.5 md:gap-4 w-full sm:w-[88px] md:w-[96px] lg:w-[104px] shrink-0 justify-between items-center sm:items-stretch">
                 {secondaryIndices.map((secIdx) => {
@@ -343,21 +342,19 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                     return (
                       <div
                         key={slide.id}
-                        className={`w-full min-w-full shrink-0 h-full relative sm:absolute sm:inset-0 sm:min-w-0 sm:shrink sm:transition-opacity sm:duration-500 sm:ease-in-out ${
-                          isActive
-                            ? "sm:opacity-100 sm:z-10 sm:pointer-events-auto"
-                            : "sm:opacity-0 sm:z-0 sm:pointer-events-none"
-                        }`}
+                        className={`w-full min-w-full shrink-0 h-full relative sm:absolute sm:inset-0 sm:min-w-0 sm:shrink sm:transition-opacity sm:duration-500 sm:ease-in-out ${isActive
+                          ? "sm:opacity-100 sm:z-10 sm:pointer-events-auto"
+                          : "sm:opacity-0 sm:z-0 sm:pointer-events-none"
+                          }`}
                         aria-hidden={!isActive}
                       >
                         <img
                           src={slide.imageUrl}
                           alt={slide.categoryLabel}
-                          className={`w-full h-full object-contain sm:object-cover select-none rounded-none sm:rounded-2xl transition-transform duration-500 ease-out ${
-                            isCurrentSlideZoomed
-                              ? "scale-105"
-                              : "scale-100 sm:group-hover:scale-105"
-                          }`}
+                          className={`w-full h-full object-contain sm:object-cover select-none rounded-none sm:rounded-2xl transition-transform duration-500 ease-out ${isCurrentSlideZoomed
+                            ? "scale-105"
+                            : "scale-100 sm:group-hover:scale-105"
+                            }`}
                           loading={idx === 0 ? "eager" : "lazy"}
                           decoding="async"
                           onError={(e) => {
@@ -398,30 +395,30 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                   </span>
                 </div>
 
-                {/* View Category Pill CTA (Part C: All screen sizes, vertically slimmed by 15-20%) */}
+                {/* Explore Products Pill CTA (Exact Reference Image 1 & 5 Match) */}
                 <div
-                  className="absolute bottom-4 left-3.5 sm:bottom-6 sm:left-6 z-20"
+                  className="absolute bottom-6 left-3.5 sm:bottom-6 sm:left-6 z-20"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Link
                     to={activeSlide.categoryPath}
-                    className="group/cta inline-flex items-center gap-2.5 sm:gap-3 px-3.5 py-1.5 sm:px-5 sm:py-2 rounded-full bg-white text-black font-bold text-xs sm:text-sm shadow-[0_4px_16px_rgba(0,0,0,0.22)] hover:shadow-[0_6px_22px_rgba(0,0,0,0.3)] transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] select-none"
+                    className="group/cta inline-flex items-center gap-2 sm:gap-2.5 px-3.5 py-1 sm:px-4.5 sm:py-1.5 rounded-full bg-white text-black font-bold text-xs sm:text-sm shadow-[0_4px_16px_rgba(0,0,0,0.22)] hover:shadow-[0_6px_22px_rgba(0,0,0,0.3)] transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] select-none"
                     style={{ backgroundColor: "#FFFFFF", color: "#000000" }}
-                    aria-label={`View ${activeSlide.categoryLabel}`}
+                    aria-label={`Explore ${activeSlide.categoryLabel}`}
                   >
-                    <span className="font-bold tracking-tight text-black">View Category</span>
+                    <span className="font-bold tracking-tight text-black leading-none">Explore Products</span>
                     <span
-                      className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center shrink-0 transition-transform duration-200 group-hover/cta:translate-x-0.5"
+                      className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center shrink-0 -translate-y-[1px] transition-transform duration-200 group-hover/cta:translate-x-0.5"
                       style={{ backgroundColor: "#7AA05A" }}
                     >
-                      <ArrowRight size={13} className="text-white" strokeWidth={2.5} />
+                      <ArrowRight size={11} className="text-white" strokeWidth={2.5} />
                     </span>
                   </Link>
                 </div>
 
-                {/* Carousel Navigation Dots: Positioned comfortably ABOVE the curved lines */}
+                {/* Carousel Navigation Dots: Clean slim active pill with thin white outline & smaller white dots */}
                 <div
-                  className="absolute bottom-5 sm:bottom-5 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center gap-2 select-none"
+                  className="absolute bottom-4 sm:bottom-5 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center gap-2 select-none"
                   aria-label="Slideshow position indicator"
                   role="tablist"
                   onClick={(e) => e.stopPropagation()}
@@ -433,17 +430,16 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                         key={slide.id}
                         type="button"
                         onClick={() => handleSelectThumbnail(idx)}
-                        className={`transition-all duration-300 focus:outline-none cursor-pointer ${
-                          isActive
-                            ? "w-7 h-2.5 rounded-full border-[1.5px] border-white"
-                            : "w-2 h-2 rounded-full bg-white/95 hover:bg-white shadow-xs"
-                        }`}
+                        className={`transition-all duration-300 focus:outline-none cursor-pointer ${isActive
+                          ? "w-6 h-2 sm:w-7 sm:h-2.5 rounded-full border border-white"
+                          : "w-1.5 h-1.5 rounded-full bg-white/95 hover:bg-white shadow-xs"
+                          }`}
                         style={
                           isActive
                             ? {
-                                background: "linear-gradient(90deg, #2D5A4A 0%, #7AA05A 100%)",
-                                boxShadow: "0 0 8px rgba(255, 255, 255, 0.95), 0 0 3px rgba(122, 160, 90, 0.8)",
-                              }
+                              backgroundColor: "#7AA05A",
+                              boxShadow: "0 0 3px rgba(255, 255, 255, 0.8)",
+                            }
                             : undefined
                         }
                         aria-current={isActive ? "true" : undefined}
@@ -453,10 +449,10 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                   })}
                 </div>
 
-                {/* MOBILE ONLY: HERO CAROUSEL BOTTOM CURVE (Shifted downward, 20% thinner green band) */}
-                <div className="absolute bottom-0 left-0 right-0 w-full h-[32px] pointer-events-none z-10 block sm:hidden overflow-hidden">
+                {/* MOBILE ONLY: HERO CAROUSEL DEEPER BOTTOM CURVE (Exact Reference Image 1 & 5 Match) */}
+                <div className="absolute bottom-0 left-0 right-0 w-full h-[56px] pointer-events-none z-10 block sm:hidden overflow-hidden">
                   <svg
-                    viewBox="0 0 1000 100"
+                    viewBox="0 0 1000 140"
                     preserveAspectRatio="none"
                     className="w-full h-full"
                     fill="none"
@@ -465,28 +461,29 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
                     <defs>
                       <linearGradient id="mobileGreenBandGrad" x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" stopColor="#7AA05A" />
-                        <stop offset="25%" stopColor="#558052" />
-                        <stop offset="50%" stopColor="#2D5A4A" />
-                        <stop offset="75%" stopColor="#558052" />
+                        <stop offset="20%" stopColor="#558052" />
+                        <stop offset="45%" stopColor="#2D5A4A" />
+                        <stop offset="60%" stopColor="#2D5A4A" />
+                        <stop offset="80%" stopColor="#558052" />
                         <stop offset="100%" stopColor="#7AA05A" />
                       </linearGradient>
                     </defs>
 
                     {/* 3. Solid pure white fill below the green band transitioning into section background */}
                     <path
-                      d="M 0,100 C 280,98 480,96 680,92 C 840,78 930,62 1000,44 L 1000,100 L 0,100 Z"
+                      d="M 0,88 C 180,132 380,140 520,140 C 720,140 860,100 1000,44 L 1000,140 L 0,140 Z"
                       fill="#FFFFFF"
                     />
 
-                    {/* 2. Continuous curved green band: 20% thinner, smooth brand gradient */}
+                    {/* 2. Continuous deeper curved green band: noticeable rise on both ends, sweeping high on right */}
                     <path
-                      d="M 0,80 C 280,90 480,90 680,76 C 840,56 930,34 1000,20 L 1000,44 C 930,62 840,78 680,92 C 480,96 280,98 0,100 Z"
+                      d="M 0,70 C 180,120 380,130 520,128 C 720,124 860,70 1000,12 L 1000,44 C 860,100 720,140 520,140 C 380,140 180,132 0,88 Z"
                       fill="url(#mobileGreenBandGrad)"
                     />
 
                     {/* 1. Clean white separator/border immediately above the green strip */}
                     <path
-                      d="M 0,78 C 280,88 480,88 680,74 C 840,54 930,32 1000,18"
+                      d="M 0,68 C 180,118 380,128 520,126 C 720,122 860,68 1000,10"
                       stroke="#FFFFFF"
                       strokeWidth="4.5"
                       strokeLinecap="round"
@@ -503,7 +500,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
 
         {/* THREE BENEFIT CARDS DIRECTLY BELOW THE HERO: CONTINUOUS DARK-GREEN BG, SQUARE EDGES, CRISP WHITE SEPARATORS */}
         <div className="mt-12 sm:mt-16 lg:mt-20 mx-4 sm:mx-0 bg-[#2D5A4A] rounded-none overflow-hidden grid grid-cols-1 md:grid-cols-3 divide-y-2 md:divide-y-0 md:divide-x-2 divide-white">
-          
+
           {/* Card 1 */}
           <div className="p-6 sm:p-8 lg:p-10 flex flex-col justify-between bg-[#2D5A4A]">
             <div>
