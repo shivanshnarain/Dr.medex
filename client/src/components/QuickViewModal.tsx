@@ -182,11 +182,11 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({ product, onClose
                     type="button"
                     onClick={() => toggleWishlist(product)}
                     className={`p-3 rounded-lg border transition-colors ${
-                      isSaved ? "bg-rose-50 border-rose-200 text-rose-600" : "border-[#EAEAEA] text-neutral-400 hover:text-rose-600 hover:bg-neutral-50"
+                      isSaved ? "bg-rose-50 border-[#E32636]/30 text-[#E32636]" : "border-[#EAEAEA] text-neutral-400 hover:text-[#E32636] hover:bg-neutral-50"
                     }`}
                     title="Save to Wishlist"
                   >
-                    <Heart size={18} fill={isSaved ? "currentColor" : "none"} />
+                    <Heart size={18} fill={isSaved ? "#E32636" : "none"} className={isSaved ? "text-[#E32636]" : ""} />
                   </button>
                 </div>
 

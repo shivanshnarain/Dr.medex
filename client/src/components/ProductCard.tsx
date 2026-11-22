@@ -238,15 +238,15 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({ product }) 
           aria-label={isSaved ? "Remove from wishlist" : "Add to wishlist"}
           className={`absolute top-2 right-2 sm:top-2.5 sm:right-2.5 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all duration-200 z-10 cursor-pointer ${
             isSaved
-              ? "bg-white text-[#7AA05A] shadow-xs border border-[#7AA05A]/30 scale-105"
-              : "bg-white/95 backdrop-blur-xs text-neutral-600 hover:text-[#7AA05A] border border-neutral-200/80 shadow-2xs hover:scale-105"
+              ? "bg-white text-[#E32636] shadow-xs border border-[#E32636]/30 scale-105"
+              : "bg-white/95 backdrop-blur-xs text-neutral-600 hover:text-[#E32636] border border-neutral-200/80 shadow-2xs hover:scale-105"
           }`}
         >
           <Heart
             size={16}
             strokeWidth={1.8}
             className={`transition-colors ${
-              isSaved ? "fill-[#7AA05A] text-[#7AA05A]" : "text-neutral-700 hover:text-[#7AA05A]"
+              isSaved ? "fill-[#E32636] text-[#E32636]" : "text-neutral-700 hover:text-[#E32636]"
             }`}
           />
         </button>

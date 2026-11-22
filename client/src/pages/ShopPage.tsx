@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useSearchParams, useParams, Link, useNavigate } from "react-router-dom";
-import { Filter, SlidersHorizontal, X, Search, RotateCcw, AlertCircle, ArrowRight, RefreshCw } from "lucide-react";
+import { useSearchParams, useParams, useNavigate } from "react-router-dom";
+import { Search, AlertCircle, RefreshCw, ChevronDown } from "lucide-react";
 import { Product, Category } from "../types";
 import { ProductCard } from "../components/ProductCard";
 import { QuickViewModal } from "../components/QuickViewModal";
@@ -114,6 +114,12 @@ export const ShopPage: React.FC = () => {
     // Website visibility rule: ONLY CORRECT products display on the public storefront
     list = list.filter((p) => p.reviewStatus === "CORRECT");
 
+    // Dynamic Inventory rule: If a product has zero available inventory, do not show it as an available product in customer-facing listing
+    list = list.filter((p) => {
+      const stock = Number(p.stock !== undefined ? p.stock : (p.stockQuantity !== undefined ? p.stockQuantity : 1));
+      return stock > 0 && p.stockStatus !== "OUT_OF_STOCK";
+    });
+
     if (selectedCategory) {
       const activeCat = categories.find(
         (c) => c.slug === selectedCategory || c.id === selectedCategory
@@ -147,6 +153,9 @@ export const ShopPage: React.FC = () => {
         selectedSubcategory === "electrosurgical-generator" ||
         selectedSubcategory === "generators" ||
         selectedSubcategory === "electrosurgical-generators";
+      const isCryoGun =
+        selectedSubcategory === "cryo-guns" ||
+        selectedSubcategory === "cryo-gun";
 
       list = list.filter((p) => {
         if (isSurgery) {
@@ -162,6 +171,9 @@ export const ShopPage: React.FC = () => {
             p.subcategory === "generators" ||
             p.subcategory === "electrosurgical-generators"
           );
+        }
+        if (isCryoGun) {
+          return p.subcategory === "cryo-guns" || p.subcategory === "cryo-gun";
         }
         return (
           p.subcategory === selectedSubcategory ||
@@ -181,43 +193,47 @@ export const ShopPage: React.FC = () => {
           (p.applications && p.applications.some((a) => a.toLowerCase().includes(q)))
       );
     }
-    // Only apply range & availability filters when on global shop-all (filters removed from category pages)
-    if (!selectedCategory) {
-      if (selectedRating) {
-        list = list.filter((p) => p.rating >= selectedRating);
-      }
-      if (onlyInStock) {
-        list = list.filter((p) => p.stock > 0);
-      }
-      if (maxPriceINR < 700000) {
-        list = list.filter((p) => p.basePrice <= maxPriceINR);
-      }
-    }
-
-    // Sort
-    switch (sortBy) {
-      case "price-low":
-        list.sort((a, b) => a.basePrice - b.basePrice);
-        break;
-      case "price-high":
-        list.sort((a, b) => b.basePrice - a.basePrice);
-        break;
-      case "rating":
-        list.sort((a, b) => b.rating - a.rating);
-        break;
-      case "newest":
-        list.sort((a, b) => b.id.localeCompare(a.id));
-        break;
-      case "best-seller":
-        list.sort((a, b) => (b.isBestSeller ? 1 : 0) - (a.isBestSeller ? 1 : 0));
-        break;
-      default:
-        // featured default
-        break;
-    }
 
     return list;
-  }, [products, selectedCategory, selectedSubcategory, searchQuery, selectedRating, onlyInStock, maxPriceINR, sortBy, categories]);
+  }, [products, selectedCategory, selectedSubcategory, searchQuery, categories]);
+
+  const activeCategoryObject = categories.find((c) => c.slug === selectedCategory || c.id === selectedCategory);
+
+  // Dynamic Category Visibility: Only display categories that have active, published, in-stock products
+  const activeCategoriesWithProducts = useMemo(() => {
+    return categories.filter((cat) => {
+      const catSlugs = [cat.id, cat.slug, (cat.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-")].filter(Boolean);
+      return products.some((p) => {
+        const matchesCat = catSlugs.includes(p.category) || catSlugs.includes((p as any).categorySlug);
+        if (!matchesCat) return false;
+        const stock = Number(p.stock !== undefined ? p.stock : (p.stockQuantity !== undefined ? p.stockQuantity : 1));
+        return stock > 0 && p.stockStatus !== "OUT_OF_STOCK" && p.reviewStatus === "CORRECT";
+      });
+    });
+  }, [categories, products]);
+
+  // Dynamic Subcategory Visibility: Only display subcategories that have active, published, in-stock products
+  const validSubcategories = useMemo(() => {
+    if (!activeCategoryObject || !Array.isArray(activeCategoryObject.subcategories)) return [];
+    return activeCategoryObject.subcategories.filter((sub) => {
+      const catSlugs = [activeCategoryObject.id, activeCategoryObject.slug, (activeCategoryObject.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-")].filter(Boolean);
+      const subSlugs = [sub.id, sub.slug, (sub.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-")].filter(Boolean);
+      if (sub.slug === "electrosurgical-surgery" || sub.id === "electrosurgical-surgery") subSlugs.push("electro-surgical-skin-cautery", "cautery");
+      if (sub.slug === "electrosurgical-generator" || sub.id === "electrosurgical-generator") subSlugs.push("generators", "electrosurgical-generators");
+      if (sub.slug === "cryo-guns" || sub.id === "cryo-guns") subSlugs.push("cryo-gun");
+
+      return products.some((p) => {
+        const matchesCat = catSlugs.includes(p.category) || catSlugs.includes((p as any).categorySlug);
+        if (!matchesCat) return false;
+        const stock = Number(p.stock !== undefined ? p.stock : (p.stockQuantity !== undefined ? p.stockQuantity : 1));
+        if (stock <= 0 || p.stockStatus === "OUT_OF_STOCK" || p.reviewStatus !== "CORRECT") return false;
+
+        const pSub = (p.subcategory || (p as any).subcategoryId || "").toLowerCase().trim();
+        const pSubs = Array.isArray(p.subcategories) ? p.subcategories.map((s) => String(s).toLowerCase().trim()) : [];
+        return subSlugs.some((s) => s.toLowerCase() === pSub || pSubs.includes(s.toLowerCase()));
+      });
+    });
+  }, [activeCategoryObject, products]);
 
   const handleCategoryClick = (catSlug: string) => {
     if (selectedCategory === catSlug) {
@@ -245,256 +261,92 @@ export const ShopPage: React.FC = () => {
     navigate("/shop-all");
   };
 
-  const activeCategoryObject = categories.find((c) => c.slug === selectedCategory);
-
   return (
-    <div className="w-full bg-[#FAFAFA] min-h-screen py-10 sm:py-14">
+    <div className="w-full bg-[#FAFAFA] min-h-screen py-8 sm:py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        {/* Breadcrumb & Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 text-xs text-neutral-400 mb-3">
-            <Link to="/" className="hover:text-[#111111] transition-colors">Home</Link>
-            <span>/</span>
-            <span className="text-[#111111] font-semibold">
-              {activeCategoryObject ? activeCategoryObject.name : "Shop All Equipment"}
-            </span>
-            {selectedSubcategory && (
-              <>
-                <span>/</span>
-                <span className="text-[#1F7A4D] font-semibold">{selectedSubcategory}</span>
-              </>
-            )}
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3.5xl font-black text-[#111111] tracking-tight">
-                {activeCategoryObject ? activeCategoryObject.name : "Medical Equipment & Technology"}
-              </h1>
-              <p className="text-xs text-neutral-500 mt-1.5">
-                Showing {filteredProducts.length} certified medical units in <strong>{currentCountry.name} ({currentCurrency})</strong>
-              </p>
-            </div>
-
-            {/* Top Toolbar */}
-            <div className="flex items-center gap-3">
-              {/* Mobile Filter Toggle Button (Only on generic Shop All, hidden on clean Category pages) */}
-              {!selectedCategory && (
-                <button
-                  type="button"
-                  onClick={() => setIsMobileFilterOpen(true)}
-                  className="lg:hidden flex items-center gap-2 px-4 py-2.5 bg-white border border-[#EAEAEA] rounded-xl text-xs font-bold text-[#111111] shadow-2xs"
-                >
-                  <SlidersHorizontal size={14} />
-                  <span>Filters</span>
-                </button>
-              )}
-
-              {/* Sort Dropdown */}
-              <div className="flex items-center gap-2 bg-white border border-[#EAEAEA] rounded-xl px-3.5 py-2 shadow-2xs">
-                <span className="text-2xs font-bold uppercase text-neutral-400">Sort:</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="text-xs font-semibold text-[#111111] bg-transparent focus:outline-none cursor-pointer"
-                >
-                  <option value="featured">Featured Standards</option>
-                  <option value="best-seller">Best Selling</option>
-                  <option value="price-low">Price: Low to High</option>
-                  <option value="price-high">Price: High to Low</option>
-                  <option value="rating">Highest Clinical Rating</option>
-                  <option value="newest">Newest Additions</option>
-                </select>
-              </div>
-            </div>
-          </div>
+        {/* Clean Header: Heading and professional English description */}
+        <div className="mb-6">
+          <h1 className="text-2xl sm:text-3.5xl font-black text-[#111111] tracking-tight">
+            {activeCategoryObject ? activeCategoryObject.name : "Medical Equipment & Technology"}
+          </h1>
+          <p className="text-xs sm:text-sm text-neutral-600 mt-2 max-w-2xl leading-relaxed">
+            {activeCategoryObject
+              ? (activeCategoryObject.shortDescription || "Precision-engineered medical equipment and certified healthcare technology.")
+              : "Explore our range of medical equipment and healthcare technology for hospitals, clinics and healthcare professionals."}
+          </p>
         </div>
 
-
-
-        {/* Subcategory Navigation on Category Pages */}
-        {activeCategoryObject && activeCategoryObject.subcategories && activeCategoryObject.subcategories.length > 0 && (
-          <div className="mb-8 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                const params = new URLSearchParams(searchParams);
-                params.delete("subcategory");
-                setSearchParams(params);
-              }}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-2xs ${
-                !selectedSubcategory
-                  ? "bg-[#7AA05A] text-white hover:bg-[#688a4c]"
-                  : "bg-white text-neutral-700 hover:text-[#2D5A4A] hover:bg-neutral-50 border border-[#EAEAEA]"
-              }`}
-            >
-              <span>All {activeCategoryObject.name.replace(/Equipment|Machines|Units/i, "").trim()}</span>
-              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${!selectedSubcategory ? "bg-white/20 text-white" : "bg-neutral-100 text-neutral-600"}`}>
-                {products.filter(p => p.category === activeCategoryObject.slug || p.category === activeCategoryObject.id).length}
-              </span>
-            </button>
-            {activeCategoryObject.subcategories.map((sub) => {
-              const isSelected = selectedSubcategory === sub.slug || selectedSubcategory === sub.id;
-              const subCount = products.filter(p => {
-                const inCat = p.category === activeCategoryObject.slug || p.category === activeCategoryObject.id;
-                if (!inCat) return false;
-                if (sub.slug === "electrosurgical-surgery" || sub.slug === "electro-surgical-skin-cautery") {
-                  return p.subcategory === "electrosurgical-surgery" || p.subcategory === "electro-surgical-skin-cautery" || p.subcategory === "cautery";
-                }
-                if (sub.slug === "electrosurgical-generator" || sub.slug === "generators") {
-                  return p.subcategory === "electrosurgical-generator" || p.subcategory === "generators" || p.subcategory === "electrosurgical-generators";
-                }
-                return p.subcategory === sub.slug || p.subcategory === sub.id || (Array.isArray(p.subcategories) && p.subcategories.includes(sub.slug));
-              }).length;
-
-              return (
-                <button
-                  key={sub.id}
-                  type="button"
-                  onClick={() => handleSubcategoryClick(sub.slug)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-2xs ${
-                    isSelected
-                      ? "bg-[#7AA05A] text-white hover:bg-[#688a4c]"
-                      : "bg-white text-neutral-700 hover:text-[#2D5A4A] hover:bg-neutral-50 border border-[#EAEAEA]"
-                  }`}
-                >
-                  <span>{sub.name}</span>
-                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isSelected ? "bg-white/20 text-white" : "bg-neutral-100 text-neutral-600"}`}>
-                    {subCount}
-                  </span>
-                </button>
-              );
-            })}
+        {/* Clean Responsive Category & Subcategory Selector Dropdowns */}
+        <div className="mb-8 flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[240px] w-full sm:w-auto">
+            <label htmlFor="shop-category-select" className="sr-only">
+              Select Category
+            </label>
+            <div className="relative">
+              <select
+                id="shop-category-select"
+                value={selectedCategory || "all"}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "all") {
+                    navigate("/shop-all");
+                  } else {
+                    navigate(`/category/${val}`);
+                  }
+                }}
+                className="w-full appearance-none bg-white border border-[#EAEAEA] rounded-xl px-4 py-2.5 pr-10 text-xs font-bold text-neutral-800 shadow-2xs hover:border-[#7AA05A] focus:outline-none focus:border-[#7AA05A] transition-colors cursor-pointer"
+              >
+                <option value="all">All Equipment & Technology</option>
+                {activeCategoriesWithProducts.map((cat) => (
+                  <option key={cat.id} value={cat.slug || cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-neutral-500">
+                <ChevronDown size={15} />
+              </div>
+            </div>
           </div>
-        )}
 
-        {/* Main Layout: Full-width for specific category listings (unwanted filters removed); 2-column sidebar for generic shop-all */}
-        <div className={selectedCategory ? "w-full" : "grid grid-cols-1 lg:grid-cols-4 gap-8 lg:gap-10"}>
-          {/* Sidebar Desktop Filters - only displayed on generic /shop-all browse */}
-          {!selectedCategory && (
-            <aside className="hidden lg:block space-y-6">
-              <div className="bg-white p-6 rounded-xl border border-[#EAEAEA] shadow-2xs space-y-6 sticky top-24">
-                <div className="flex items-center justify-between pb-3.5 border-b border-[#EAEAEA]">
-                  <span className="text-xs font-bold text-[#111111] uppercase tracking-wider flex items-center gap-2">
-                    <Filter size={14} className="text-[#1F7A4D]" />
-                    Filter Equipment
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleResetFilters}
-                    className="text-3xs text-neutral-500 hover:text-[#111111] font-bold flex items-center gap-1 transition-colors"
-                  >
-                    <RotateCcw size={11} />
-                    Reset
-                  </button>
-                </div>
-
-                {/* Categories Accordion */}
-                <div>
-                  <h4 className="text-2xs font-extrabold text-neutral-400 uppercase tracking-wider mb-3">
-                    Categories
-                  </h4>
-                  <div className="space-y-1.5">
-                    {categories.map((cat) => (
-                      <div key={cat.id}>
-                        <button
-                          type="button"
-                          onClick={() => handleCategoryClick(cat.slug)}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${
-                            selectedCategory === cat.slug
-                              ? "bg-[#7AA05A] text-white font-bold"
-                              : "text-neutral-700 hover:bg-[#F7F7F7] hover:text-[#2D5A4A]"
-                          }`}
-                        >
-                          <span>{cat.name}</span>
-                          <span className={`text-3xs font-mono ${selectedCategory === cat.slug ? "text-white/80" : "text-neutral-400"}`}>
-                            {cat.subcategories.length}
-                          </span>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Price Range Slider in Active Currency */}
-                <div>
-                  <div className="flex justify-between items-center mb-2.5">
-                    <h4 className="text-2xs font-extrabold text-neutral-400 uppercase tracking-wider">
-                      Maximum Budget
-                    </h4>
-                    <span className="text-xs font-bold text-[#111111] font-mono">
-                      {formatPrice(maxPriceINR)}
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="5000"
-                    max="700000"
-                    step="10000"
-                    value={maxPriceINR}
-                    onChange={(e) => setMaxPriceINR(Number(e.target.value))}
-                    className="w-full h-1.5 bg-[#EAEAEA] rounded-lg appearance-none cursor-pointer accent-[#7AA05A]"
-                  />
-                  <div className="flex justify-between text-3xs text-neutral-400 font-mono mt-1.5">
-                    <span>{formatPrice(5000)}</span>
-                    <span>{formatPrice(700000)}</span>
-                  </div>
-                </div>
-
-                {/* Availability & Rating */}
-                <div className="space-y-4 pt-4 border-t border-[#EAEAEA]">
-                  <label className="flex items-center gap-2.5 cursor-pointer text-xs text-neutral-700">
-                    <input
-                      type="checkbox"
-                      checked={onlyInStock}
-                      onChange={(e) => setOnlyInStock(e.target.checked)}
-                      className="w-4 h-4 rounded-sm border-[#EAEAEA] text-[#2D5A4A] focus:ring-[#7AA05A]"
-                    />
-                    <span>Show Only In-Stock Equipment</span>
-                  </label>
-
-                  <div>
-                    <h4 className="text-2xs font-extrabold text-neutral-400 uppercase tracking-wider mb-2">
-                      Minimum Rating
-                    </h4>
-                    <div className="flex gap-2">
-                      {[4, 4.5, 4.8].map((r) => (
-                        <button
-                          key={r}
-                          type="button"
-                          onClick={() => setSelectedRating(selectedRating === r ? null : r)}
-                          className={`px-3 py-1.5 text-2xs rounded-md border font-semibold transition-all ${
-                            selectedRating === r
-                              ? "bg-[#7AA05A] border-[#7AA05A] text-white font-bold"
-                              : "border-[#EAEAEA] text-neutral-600 hover:bg-[#F7F7F7] hover:text-[#2D5A4A]"
-                          }`}
-                        >
-                          ★ {r}+
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Institutional Tender Notice */}
-                <div className="p-4 bg-[#FAFAFA] border border-[#EAEAEA] rounded-xl text-xs space-y-1.5">
-                  <div className="font-bold text-[#111111]">Hospital Procurement</div>
-                  <p className="text-3xs text-neutral-500 leading-relaxed">
-                    Need customized clinical tender specifications, CIF air freight pricing, or bulk discounts?
-                  </p>
-                  <Link
-                    to="/request-quote"
-                    className="inline-block text-3xs font-bold text-[#111111] hover:text-[#1F7A4D] hover:underline pt-1 transition-colors"
-                  >
-                    Submit Official RFQ →
-                  </Link>
+          {activeCategoryObject && validSubcategories.length > 0 && (
+            <div className="relative min-w-[220px] w-full sm:w-auto">
+              <label htmlFor="shop-subcategory-select" className="sr-only">
+                Select Subcategory
+              </label>
+              <div className="relative">
+                <select
+                  id="shop-subcategory-select"
+                  value={selectedSubcategory || "all"}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const params = new URLSearchParams(searchParams);
+                    if (val === "all") {
+                      params.delete("subcategory");
+                    } else {
+                      params.set("subcategory", val);
+                    }
+                    setSearchParams(params);
+                  }}
+                  className="w-full appearance-none bg-white border border-[#EAEAEA] rounded-xl px-4 py-2.5 pr-10 text-xs font-bold text-neutral-800 shadow-2xs hover:border-[#7AA05A] focus:outline-none focus:border-[#7AA05A] transition-colors cursor-pointer"
+                >
+                  <option value="all">All {activeCategoryObject.name.replace(/Equipment|Machines|Units/i, "").trim()}</option>
+                  {validSubcategories.map((sub) => (
+                    <option key={sub.id} value={sub.slug || sub.id}>
+                      {sub.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-neutral-500">
+                  <ChevronDown size={15} />
                 </div>
               </div>
-            </aside>
+            </div>
           )}
+        </div>
 
-          {/* Product Grid Area: Full width on category pages, 3 cols on shop-all */}
-          <main className={selectedCategory ? "w-full" : "lg:col-span-3"}>
+        {/* Product Grid Area: Clean full width on both Shop All and Category pages */}
+        <main className="w-full">
             {isLoading ? (
               <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
                 {[...Array(6)].map((_, i) => (
@@ -811,61 +663,7 @@ export const ShopPage: React.FC = () => {
               </div>
             )}
           </main>
-        </div>
       </div>
-
-      {/* Mobile Filters Slide-over */}
-      {isMobileFilterOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden lg:hidden flex">
-          <div
-            onClick={() => setIsMobileFilterOpen(false)}
-            className="fixed inset-0 bg-[#000000]/60 backdrop-blur-xs"
-          />
-          <div className="relative w-4/5 max-w-xs bg-white h-full overflow-y-auto p-6 shadow-2xl flex flex-col justify-between">
-            <div className="space-y-6">
-              <div className="flex items-center justify-between pb-3.5 border-b border-[#EAEAEA]">
-                <span className="font-bold text-[#111111] text-sm">Filter Equipment</span>
-                <button
-                  onClick={() => setIsMobileFilterOpen(false)}
-                  className="text-neutral-400 hover:text-[#111111]"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Categories */}
-              <div>
-                <h4 className="text-2xs font-extrabold text-neutral-400 uppercase tracking-wider mb-2.5">Categories</h4>
-                <div className="space-y-1.5">
-                  {categories.map((cat) => (
-                    <button
-                      key={cat.id}
-                      onClick={() => {
-                        handleCategoryClick(cat.slug);
-                        setIsMobileFilterOpen(false);
-                      }}
-                      className={`w-full text-left text-xs py-2 px-3 rounded-lg transition-colors ${
-                        selectedCategory === cat.slug ? "bg-[#7AA05A] text-white font-bold" : "text-neutral-700 hover:bg-[#F7F7F7] hover:text-[#2D5A4A]"
-                      }`}
-                    >
-                      {cat.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-[#EAEAEA]">
-              <button
-                onClick={() => setIsMobileFilterOpen(false)}
-                className="w-full py-3 bg-[#7AA05A] hover:bg-[#688a4c] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-              >
-                Apply Filters
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modals */}
       <QuickViewModal

@@ -532,6 +532,10 @@ export const Header: React.FC = () => {
               if (spec.canonicalLabel === "Electrosurgical" && (subName.includes("light") || subName.includes("lamp"))) {
                 return false;
               }
+              // Dynamically prune empty subcategories (e.g. Cryotherapy Systems and Replacement Nozzles with 0 products)
+              if (spec.canonicalLabel === "Cryosurgical" && (sub.id === "cryo-systems" || sub.id === "cryo-nozzles" || sub.slug === "cryotherapy-systems" || sub.slug === "cryo-replacement-nozzles")) {
+                return false;
+              }
               return true;
             })
             .map((sub) => ({
@@ -1513,73 +1517,19 @@ export const Header: React.FC = () => {
                     </span>
                   )}
                 </Link>
-              </div>
-            </div>
 
-            {/* Mobile Footer Area */}
-            <div className="p-4 border-t border-neutral-100 space-y-2.5 bg-white shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMobileMenuOpen(false);
-                  setIsCountryModalOpen(true);
-                }}
-                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-neutral-50 border border-neutral-200 text-xs font-bold text-neutral-800 hover:bg-neutral-100 transition-colors cursor-pointer"
-              >
-                <span className="flex items-center gap-2">
-                  <Globe size={16} className="text-[#167A4A]" />
-                  <span>Country & Currency</span>
-                </span>
-                <span className="text-[#167A4A] font-mono font-bold">
-                  {currentCountry.flag} {currentCurrency}
-                </span>
-              </button>
-
-              {user ? (
-                <div className="space-y-2">
-                  <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200">
-                    <div className="text-3xs font-extrabold uppercase tracking-wider text-[#7AA05A]">
-                      Verified Customer
-                    </div>
-                    <div className="text-xs font-bold text-neutral-900 truncate mt-0.5">
-                      {user.fullName || "Customer"}
-                    </div>
-                    <div className="text-2xs text-neutral-500 truncate">{user.email}</div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Link
-                      to="/account"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className="py-2.5 px-3 text-center bg-white border border-neutral-200 hover:bg-neutral-50 text-neutral-800 rounded-xl text-xs font-bold transition-colors"
-                    >
-                      My Account
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        setIsMobileMenuOpen(false);
-                        await logout();
-                      }}
-                      className="py-2.5 px-3 text-center bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                    >
-                      Sign Out
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    setAuthModalTab("signin");
-                    setIsAuthModalOpen(true);
-                  }}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 text-center bg-[#7AA05A] hover:bg-[#688a4c] text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                {/* MY DETAILS option directly below Saved Equipment */}
+                <Link
+                  to="/account"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center justify-between py-2 px-3 rounded-xl hover:bg-neutral-50 text-neutral-800 transition-colors"
                 >
-                  <User size={15} className="text-white" />
-                  <span>Sign In / Create Account</span>
-                </button>
-              )}
+                  <span className="flex items-center gap-2">
+                    <User size={16} className="text-[#167A4A]" />
+                    <span>MY DETAILS</span>
+                  </span>
+                </Link>
+              </div>
             </div>
           </div>
         </div>,

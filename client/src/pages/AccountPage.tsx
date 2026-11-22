@@ -20,7 +20,8 @@ import {
   Lock,
   Eye,
   EyeOff,
-  Bell
+  Bell,
+  HelpCircle
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useAdminAuth } from "../context/AdminAuthContext";
@@ -78,7 +79,13 @@ export const AccountPage: React.FC<AccountPageProps> = ({ initialAuthTab }) => {
   const [signupError, setSignupError] = useState<string | null>(null);
   const [signupSuccess, setSignupSuccess] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"orders" | "quotes" | "wishlist" | "addresses" | "profile" | "notifications">("orders");
+  const [activeTab, setActiveTab] = useState<"orders" | "quotes" | "wishlist" | "addresses" | "profile" | "notifications" | "faqs">(() => {
+    const p = searchParams.get("tab");
+    if (p === "orders" || p === "wishlist" || p === "faqs" || p === "quotes" || p === "addresses" || p === "notifications") {
+      return p;
+    }
+    return "profile";
+  });
   const [profileSuccess, setProfileSuccess] = useState(false);
 
   // Push Notification state
@@ -814,8 +821,17 @@ export const AccountPage: React.FC<AccountPageProps> = ({ initialAuthTab }) => {
           {/* Navigation Sidebar (3 cols) */}
           <div className="lg:col-span-3 bg-white rounded-xl border border-[#EAEAEA] p-3 shadow-2xs space-y-1">
             <button
+              onClick={() => setActiveTab("profile")}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                activeTab === "profile" ? "bg-[#7AA05A] text-white" : "text-neutral-700 hover:bg-[#F7F7F7] hover:text-[#2D5A4A]"
+              }`}
+            >
+              <User size={16} />
+              <span>Personal Information</span>
+            </button>
+            <button
               onClick={() => setActiveTab("orders")}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-bold transition-colors ${
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                 activeTab === "orders" ? "bg-[#7AA05A] text-white" : "text-neutral-700 hover:bg-[#F7F7F7] hover:text-[#2D5A4A]"
               }`}
             >
@@ -823,50 +839,47 @@ export const AccountPage: React.FC<AccountPageProps> = ({ initialAuthTab }) => {
               <span>My Orders ({orders.length})</span>
             </button>
             <button
+              onClick={() => setActiveTab("wishlist")}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                activeTab === "wishlist" ? "bg-[#7AA05A] text-white" : "text-neutral-700 hover:bg-[#F7F7F7] hover:text-[#2D5A4A]"
+              }`}
+            >
+              <Heart size={16} className={activeTab === "wishlist" ? "fill-white" : "fill-[#E32636] text-[#E32636]"} />
+              <span>Saved Equipment ({wishlist.length})</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("faqs")}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                activeTab === "faqs" ? "bg-[#7AA05A] text-white" : "text-neutral-700 hover:bg-[#F7F7F7] hover:text-[#2D5A4A]"
+              }`}
+            >
+              <HelpCircle size={16} />
+              <span>FAQs</span>
+            </button>
+            <button
               onClick={() => setActiveTab("quotes")}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-bold transition-colors ${
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                 activeTab === "quotes" ? "bg-[#7AA05A] text-white" : "text-neutral-700 hover:bg-[#F7F7F7] hover:text-[#2D5A4A]"
               }`}
             >
               <FileText size={16} />
               <span>B2B RFQs ({quotes.length})</span>
             </button>
-            <button
-              onClick={() => setActiveTab("wishlist")}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-bold transition-colors ${
-                activeTab === "wishlist" ? "bg-[#7AA05A] text-white" : "text-neutral-700 hover:bg-[#F7F7F7] hover:text-[#2D5A4A]"
-              }`}
-            >
-              <Heart size={16} />
-              <span>Saved Equipment ({wishlist.length})</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("addresses")}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-bold transition-colors ${
-                activeTab === "addresses" ? "bg-[#7AA05A] text-white" : "text-neutral-700 hover:bg-[#F7F7F7] hover:text-[#2D5A4A]"
-              }`}
-            >
-              <MapPin size={16} />
-              <span>Shipping Facilities ({addresses.length})</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("profile")}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-bold transition-colors ${
-                activeTab === "profile" ? "bg-[#7AA05A] text-white" : "text-neutral-700 hover:bg-[#F7F7F7] hover:text-[#2D5A4A]"
-              }`}
-            >
-              <User size={16} />
-              <span>Facility Settings</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("notifications")}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-bold transition-colors ${
-                activeTab === "notifications" ? "bg-[#7AA05A] text-white" : "text-neutral-700 hover:bg-[#F7F7F7] hover:text-[#2D5A4A]"
-              }`}
-            >
-              <Bell size={16} />
-              <span>Notification Alerts</span>
-            </button>
+
+            {/* Account Actions: Secure Sign Out */}
+            <div className="pt-2 mt-2 border-t border-[#EAEAEA]">
+              <button
+                type="button"
+                onClick={async () => {
+                  await logout();
+                  navigate("/");
+                }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
+              >
+                <LogOut size={16} />
+                <span>Sign Out</span>
+              </button>
+            </div>
           </div>
 
           {/* Tab Content (9 cols) */}
@@ -882,7 +895,9 @@ export const AccountPage: React.FC<AccountPageProps> = ({ initialAuthTab }) => {
                 </div>
 
                 {orders.length === 0 ? (
-                  <p className="text-xs text-neutral-500 py-6">No previous orders found in database.</p>
+                  <div className="py-12 text-center">
+                    <p className="text-sm font-semibold text-neutral-600">You haven’t placed any orders yet.</p>
+                  </div>
                 ) : (
                   <div className="space-y-4">
                     {orders.map((ord) => (
@@ -1000,11 +1015,11 @@ export const AccountPage: React.FC<AccountPageProps> = ({ initialAuthTab }) => {
             {activeTab === "wishlist" && (
               <div className="space-y-6">
                 <h3 className="text-base font-bold text-[#111111] pb-3.5 border-b border-[#EAEAEA]">
-                  Saved Medical Devices ({wishlist.length})
+                  Saved Equipment ({wishlist.length})
                 </h3>
 
                 {wishlist.length === 0 ? (
-                  <p className="text-xs text-neutral-500 py-6">No products saved to wishlist yet.</p>
+                  <p className="text-xs text-neutral-500 py-6">You have no saved equipment yet.</p>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {wishlist.map((prod) => (
@@ -1036,9 +1051,10 @@ export const AccountPage: React.FC<AccountPageProps> = ({ initialAuthTab }) => {
                           <button
                             type="button"
                             onClick={() => toggleWishlist(prod)}
-                            className="text-xs text-rose-600 hover:underline"
+                            className="text-xs font-semibold text-[#E32636] hover:underline flex items-center gap-1 cursor-pointer"
                           >
-                            Remove
+                            <Heart size={13} className="fill-[#E32636] text-[#E32636]" />
+                            <span>Remove</span>
                           </button>
                         </div>
                       </div>
@@ -1330,10 +1346,57 @@ export const AccountPage: React.FC<AccountPageProps> = ({ initialAuthTab }) => {
                       type="submit"
                       className="px-5 py-2.5 bg-[#111111] hover:bg-[#1F7A4D] text-white font-bold rounded-lg transition-colors cursor-pointer"
                     >
-                      Save Preferences
+                      Save Changes
                     </button>
                   </div>
                 </form>
+              </div>
+            )}
+
+            {/* FAQS TAB */}
+            {activeTab === "faqs" && (
+              <div className="space-y-6">
+                <div className="pb-3.5 border-b border-[#EAEAEA]">
+                  <h3 className="text-base font-bold text-[#111111]">Frequently Asked Questions</h3>
+                  <p className="text-xs text-neutral-500 mt-1">
+                    Hospital procurement, international delivery, warranty and biomedical compliance.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {[
+                    {
+                      q: "How does DR.MEDEX ensure medical device quality and international compliance?",
+                      a: "All equipment distributed by DR.MEDEX is manufactured under certified ISO 13485 medical device quality systems and complies with CE, FDA, or relevant international medical safety standards. Each unit undergoes strict multi-point factory QA testing before dispatch."
+                    },
+                    {
+                      q: "What warranty coverage is included with DR.MEDEX equipment?",
+                      a: "Our certified medical systems and units come with a comprehensive 12 to 24-month manufacturer warranty covering electronic components, mechanical assemblies, and calibration fidelity. Extended service contracts and maintenance support are available upon request."
+                    },
+                    {
+                      q: "How are international hospital orders shipped and cleared through customs?",
+                      a: "We ship globally via temperature-controlled, shock-isolated air freight (DHL Express, FedEx Medical Logistics, or specialized air cargo). Full commercial invoices, CE certificates, packing lists, and export declarations are provided for customs clearance."
+                    },
+                    {
+                      q: "What payment currencies and methods are supported?",
+                      a: "We accept institutional wire transfers (SWIFT/IBAN), verified credit/debit cards, and PayPal. Invoices and transactions can be processed in USD, EUR, GBP, AUD, CAD, INR, and other major regional currencies."
+                    },
+                    {
+                      q: "How do I request an official Proforma Invoice or institutional B2B quote?",
+                      a: "You can submit an official B2B RFQ directly from any product page or via our Request Quote page. Our clinical sales team responds with a formal proforma quote within 24 business hours."
+                    }
+                  ].map((faq, idx) => (
+                    <div key={idx} className="p-4 bg-[#FAFAFA] rounded-xl border border-[#EAEAEA] space-y-1.5">
+                      <div className="text-xs font-bold text-[#111111] flex items-center gap-2">
+                        <HelpCircle size={15} className="text-[#7AA05A] shrink-0" />
+                        <span>{faq.q}</span>
+                      </div>
+                      <p className="text-xs text-neutral-600 leading-relaxed pl-6">
+                        {faq.a}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

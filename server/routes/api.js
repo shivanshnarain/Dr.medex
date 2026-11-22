@@ -52,6 +52,12 @@ router.get("/products", async (req, res) => {
     // Website visibility rule: ONLY CORRECT products display on the public storefront
     list = list.filter(p => p.reviewStatus === "CORRECT");
 
+    // Dynamic Inventory rule: If a product has zero available inventory, do not show it as an available product in customer-facing listing
+    list = list.filter(p => {
+      const stock = Number(p.stock !== undefined ? p.stock : (p.stockQuantity !== undefined ? p.stockQuantity : 1));
+      return stock > 0 && p.stockStatus !== "OUT_OF_STOCK";
+    });
+
     // Handle additional query filters that might be on storefront
     if (req.query.subcategory && req.query.subcategory !== "ALL") {
       list = list.filter(p => p.subcategory === req.query.subcategory || (Array.isArray(p.subcategories) && p.subcategories.includes(req.query.subcategory)));
@@ -226,10 +232,67 @@ router.get("/search/live", (req, res) => {
   res.json({ success: true, ...result });
 });
 
-// CATEGORIES
+// CATEGORIES - Dynamic Category & Subcategory Visibility
 router.get("/categories", async (req, res) => {
   const includeInactive = req.query.includeInactive === "true";
-  const categories = await store.getCategoriesAsync(includeInactive);
+  const includeEmpty = req.query.includeEmpty === "true";
+  let categories = await store.getCategoriesAsync(includeInactive);
+
+  // If customer-facing (not includeEmpty), prune empty categories and subcategories that have zero active, published, in-stock products
+  if (!includeEmpty && !includeInactive) {
+    try {
+      const deletedIds = mongoService.isConfigured() ? await mongoService.getDeletedProductIds() : new Set();
+      let allProducts = [];
+      if (mongoService.isConfigured()) {
+        try {
+          const mongoList = await mongoService.getProductsFromMongo({});
+          allProducts = Array.isArray(mongoList) ? mongoList : store.getProducts({});
+        } catch {
+          allProducts = store.getProducts({});
+        }
+      } else {
+        allProducts = store.getProducts({});
+      }
+
+      const eligibleProducts = allProducts.filter(p =>
+        p &&
+        !deletedIds.has(String(p.id)) &&
+        (p.status || "ACTIVE") === "ACTIVE" &&
+        p.status !== "ARCHIVED" &&
+        !p.isRetired &&
+        p.inCatalogue !== false &&
+        p.reviewStatus === "CORRECT" &&
+        (Number(p.stock !== undefined ? p.stock : (p.stockQuantity !== undefined ? p.stockQuantity : 1)) > 0) &&
+        p.stockStatus !== "OUT_OF_STOCK"
+      );
+
+      const countForSub = (cat, sub) => {
+        const catSlugs = [cat.id, cat.slug, (cat.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-")].filter(Boolean);
+        const subSlugs = [sub.id, sub.slug, (sub.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-")].filter(Boolean);
+        if (sub.slug === "electrosurgical-surgery" || sub.id === "electrosurgical-surgery") subSlugs.push("electro-surgical-skin-cautery", "cautery");
+        if (sub.slug === "electrosurgical-generator" || sub.id === "electrosurgical-generator") subSlugs.push("generators", "electrosurgical-generators");
+        if (sub.slug === "cryo-guns" || sub.id === "cryo-guns") subSlugs.push("cryo-gun");
+
+        return eligibleProducts.filter(p => {
+          const matchesCat = catSlugs.includes(p.category) || catSlugs.includes(p.categorySlug);
+          if (!matchesCat) return false;
+          const pSub = (p.subcategory || p.subcategoryId || "").toLowerCase().trim();
+          const pSubs = Array.isArray(p.subcategories) ? p.subcategories.map(s => String(s).toLowerCase().trim()) : [];
+          return subSlugs.some(s => s.toLowerCase() === pSub || pSubs.includes(s.toLowerCase()));
+        }).length;
+      };
+
+      categories = categories.map(cat => {
+        const catSlugs = [cat.id, cat.slug, (cat.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-")].filter(Boolean);
+        const totalCatProds = eligibleProducts.filter(p => catSlugs.includes(p.category) || catSlugs.includes(p.categorySlug)).length;
+        const validSubs = (cat.subcategories || []).filter(sub => countForSub(cat, sub) > 0);
+        return { ...cat, totalCatProds, subcategories: validSubs };
+      }).filter(cat => cat.totalCatProds > 0);
+    } catch (catFilterErr) {
+      console.warn("[api/categories] Error applying dynamic visibility filtering:", catFilterErr);
+    }
+  }
+
   res.json({ success: true, categories });
 });
 
