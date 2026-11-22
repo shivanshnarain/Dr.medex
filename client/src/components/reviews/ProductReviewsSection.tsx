@@ -144,8 +144,25 @@ export const ProductReviewsSection: React.FC<ProductReviewsSectionProps> = ({
     }
   }, [location.search]);
 
-  // Handler for Write a Review button (opens popup directly)
+  // Lock background body scroll when review modal is active
+  useEffect(() => {
+    if (showReviewForm) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [showReviewForm]);
+
+  // Handler for Write a Review button (requires auth first, preserving product context)
   const handleWriteReviewClick = () => {
+    const isAuthed = Boolean(user?.id || user?.email || isAuthenticated);
+    if (!isAuthed) {
+      setIsAuthModalOpen(true);
+      return;
+    }
     setShowReviewForm(true);
     setSubmitSuccess(false);
     setSubmitError(null);
@@ -510,7 +527,7 @@ export const ProductReviewsSection: React.FC<ProductReviewsSectionProps> = ({
 
             {/* Suggestions Header Row */}
             <div className="flex items-center justify-between gap-2 mt-3 mb-2 flex-wrap">
-              <h4 className="font-bold text-xs sm:text-[13px] text-[#184e38]">
+              <h4 className="font-bold text-xs sm:text-[13px] text-[#2D5A4A]">
                 Based on your rating, here are some suggested reviews for you:
               </h4>
 
@@ -518,7 +535,7 @@ export const ProductReviewsSection: React.FC<ProductReviewsSectionProps> = ({
                 type="button"
                 onClick={handleRefreshSuggestions}
                 disabled={isLoadingSuggestions}
-                className="bg-[#E2EDE3] hover:bg-[#D5E5D7] text-[#184e38] text-2xs sm:text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                className="bg-[#E8F1E9] hover:bg-[#DCEADA] text-[#2D5A4A] text-2xs sm:text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
               >
                 <RefreshCw size={12} className={isLoadingSuggestions ? "animate-spin" : ""} />
                 <span>{isLoadingSuggestions ? "Refreshing..." : "Refresh Suggestions"}</span>
@@ -528,7 +545,7 @@ export const ProductReviewsSection: React.FC<ProductReviewsSectionProps> = ({
             {/* Suggestions Cards Grid (3 columns on desktop, 2 on tablet, 1 on mobile) */}
             {isLoadingSuggestions ? (
               <div className="p-6 text-center text-neutral-500 bg-neutral-50 rounded-xl flex items-center justify-center gap-2 border border-neutral-200/60 my-1">
-                <Loader2 size={16} className="animate-spin text-[#184e38]" />
+                <Loader2 size={16} className="animate-spin text-[#2D5A4A]" />
                 <span className="text-xs font-semibold">Generating fresh {rating}-star suggestions...</span>
               </div>
             ) : (
@@ -539,48 +556,44 @@ export const ProductReviewsSection: React.FC<ProductReviewsSectionProps> = ({
                     <div
                       key={suggestion.id}
                       onClick={() => handleAddSuggestion(suggestion)}
-                      className={`relative overflow-hidden rounded-xl p-2.5 sm:p-3 text-left transition-all duration-200 hover:shadow-md cursor-pointer flex flex-col justify-between min-h-[66px] sm:min-h-[70px] select-none border border-[#0D4C3C] ${
+                      className={`relative overflow-hidden rounded-xl p-2.5 sm:p-3 text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[66px] sm:min-h-[70px] select-none border ${
                         isSelected
-                          ? "ring-2 ring-[#0D4C3C] shadow-md"
-                          : "hover:border-[#0D4C3C]"
+                          ? "bg-[#2D5A4A] border-[#2D5A4A] text-white shadow-md ring-1 ring-[#2D5A4A]"
+                          : "bg-white border-[#7AA05A]/70 hover:border-[#7AA05A] text-[#171717] hover:shadow-xs"
                       }`}
-                      style={{
-                        backgroundColor: "#7AA05A"
-                      }}
                       role="button"
                       aria-pressed={isSelected}
                       aria-label={`Select review suggestion: ${suggestion.text}`}
                     >
-                      {/* Top row: 5 small yellow/gold stars + (+) Add button */}
+                      {/* Top row: 5 small yellow/gold stars + Indicator */}
                       <div className="flex items-center justify-between gap-1 relative z-10">
                         <div className="flex items-center gap-0.5">
                           {[1, 2, 3, 4, 5].map((s) => (
                             <Star key={s} size={11} className="text-[#F59E0B] fill-[#F59E0B]" />
                           ))}
                         </div>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAddSuggestion(suggestion);
-                          }}
-                          className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+                        <div
+                          className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors shrink-0 ${
                             isSelected
-                              ? "bg-[#0D4C3C] text-white shadow-xs"
-                              : "bg-white/25 hover:bg-white/35 text-white"
+                              ? "bg-white text-[#2D5A4A] shadow-xs"
+                              : "border border-[#7AA05A] text-[#7AA05A] hover:bg-[#7AA05A]/10"
                           }`}
-                          aria-label={isSelected ? "Selected suggestion" : "Select suggestion"}
+                          aria-hidden="true"
                         >
                           {isSelected ? (
-                            <Check size={12} strokeWidth={2.8} />
+                            <Check size={12} strokeWidth={3} />
                           ) : (
                             <Plus size={12} strokeWidth={2.5} />
                           )}
-                        </button>
+                        </div>
                       </div>
 
-                      {/* Suggestion text: strictly 1-2 lines, white text, fully visible without scrollbar */}
-                      <p className="text-[#FFFFFF] text-2xs sm:text-[12px] font-medium leading-snug mt-1 relative z-10">
+                      {/* Suggestion text: clean high contrast, 1-2 lines */}
+                      <p
+                        className={`text-2xs sm:text-[12px] font-medium leading-snug mt-1 relative z-10 ${
+                          isSelected ? "text-white" : "text-[#171717]"
+                        }`}
+                      >
                         {suggestion.text}
                       </p>
                     </div>
@@ -631,7 +644,7 @@ export const ProductReviewsSection: React.FC<ProductReviewsSectionProps> = ({
                   }
                 }}
                 placeholder="Share your experience with this product (up to 200 characters)..."
-                className="w-full p-2 text-xs sm:text-[13px] border border-neutral-200 rounded-xl bg-white text-neutral-900 placeholder:text-neutral-400 focus:outline-hidden focus:ring-1 focus:ring-[#184e38] focus:border-[#184e38] leading-relaxed resize-none"
+                className="w-full p-2.5 text-xs sm:text-[13px] border border-neutral-200 rounded-xl bg-white text-[#171717] placeholder:text-neutral-400 focus:outline-hidden focus:ring-1 focus:ring-[#2D5A4A] focus:border-[#2D5A4A] leading-relaxed resize-none"
               />
               <div className="flex items-center justify-between mt-0.5 text-neutral-400 text-[10px]">
                 <span>Minimum 10 characters</span>
@@ -655,7 +668,7 @@ export const ProductReviewsSection: React.FC<ProductReviewsSectionProps> = ({
                 type="button"
                 onClick={() => handleSubmitReview()}
                 disabled={isSubmitting}
-                className="bg-[#184e38] hover:bg-[#133f2d] text-white font-semibold text-xs sm:text-sm px-7 py-2 rounded-full flex items-center gap-1.5 shadow-sm hover:shadow transition-all disabled:opacity-50 cursor-pointer"
+                className="bg-[#2D5A4A] hover:bg-[#23473a] text-white font-semibold text-xs sm:text-sm px-7 py-2.5 rounded-full flex items-center gap-1.5 shadow-sm hover:shadow transition-all disabled:opacity-50 cursor-pointer"
               >
                 {isSubmitting ? (
                   <>
@@ -681,29 +694,7 @@ export const ProductReviewsSection: React.FC<ProductReviewsSectionProps> = ({
             <Loader2 size={24} className="animate-spin text-[#2D5A4A]" />
             <span className="text-xs">Loading approved customer reviews...</span>
           </div>
-        ) : reviews.length === 0 ? (
-          <div className="p-8 text-center bg-[#FAF9F7] border border-[#E5E1DD] rounded-2xl flex flex-col items-center justify-center gap-3">
-            <div className="flex items-center gap-1">
-              {[1, 2, 3, 4, 5].map((starIdx) => (
-                <Star key={starIdx} size={18} className="text-[#F59E0B] fill-[#F59E0B]" />
-              ))}
-            </div>
-            <h4 className="text-sm font-bold text-[#111111]">No Customer Reviews Yet</h4>
-            <p className="text-xs text-neutral-500 max-w-md">
-              Be the first verified clinician or healthcare facility to share feedback for this product.
-            </p>
-            {!showReviewForm && (
-              <button
-                type="button"
-                onClick={handleWriteReviewClick}
-                className="mt-1 px-4 py-2 bg-[#2D5A4A] hover:bg-[#23473a] text-white rounded-lg text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer"
-              >
-                <Plus size={13} />
-                <span>Write the First Review</span>
-              </button>
-            )}
-          </div>
-        ) : (
+        ) : reviews.length === 0 ? null : (
           reviews.map((rev) => {
             const authorDisplay =
               rev.customerName ||

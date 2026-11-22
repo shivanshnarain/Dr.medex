@@ -40,37 +40,67 @@ function getFirestoreDb() {
     const projectId = process.env.FIREBASE_PROJECT_ID || "drmedex";
     let credential = null;
 
-    // 1. Check for Service Account Key Path
-    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    if (serviceAccountPath) {
+    // 1. Check for Service Account JSON string in environment variable (Preferred for Vercel/serverless production)
+    const envServiceAccountRaw =
+      process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
+      process.env.FIREBASE_SERVICE_ACCOUNT ||
+      process.env.FIREBASE_SERVICE_ACCOUNT_JSON ||
+      process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 ||
+      process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+
+    if (envServiceAccountRaw) {
+      try {
+        let rawKey = envServiceAccountRaw.trim();
+        // Support base64 encoded service account string
+        if (!rawKey.startsWith("{") && !rawKey.startsWith("[")) {
+          try {
+            const decoded = Buffer.from(rawKey, "base64").toString("utf8");
+            if (decoded.trim().startsWith("{")) {
+              rawKey = decoded.trim();
+            }
+          } catch (e) {}
+        }
+        // Handle optional outer quotes
+        if ((rawKey.startsWith('"') && rawKey.endsWith('"')) || (rawKey.startsWith("'") && rawKey.endsWith("'"))) {
+          rawKey = rawKey.slice(1, -1).trim();
+        }
+        const serviceAccount = JSON.parse(rawKey);
+        // Fix escaped newlines in private key if present
+        if (serviceAccount && typeof serviceAccount.private_key === "string" && serviceAccount.private_key.includes("\\n")) {
+          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
+        }
+        credential = cert(serviceAccount);
+      } catch (parseErr) {
+        throw new Error("Invalid JSON in FIREBASE_SERVICE_ACCOUNT_KEY environment variable.");
+      }
+    }
+    // 2. Check for individual environment variables (Client Email + Private Key)
+    else if (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+      const privateKey = process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n");
+      credential = cert({
+        projectId: process.env.FIREBASE_PROJECT_ID || projectId,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey
+      });
+    }
+    // 3. Check for Service Account Key Path on disk
+    else if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH || process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || process.env.GOOGLE_APPLICATION_CREDENTIALS;
       const resolvedPath = path.isAbsolute(serviceAccountPath)
         ? serviceAccountPath
         : path.resolve(process.cwd(), serviceAccountPath);
 
       if (fs.existsSync(resolvedPath)) {
         const serviceAccount = JSON.parse(fs.readFileSync(resolvedPath, "utf8"));
+        if (serviceAccount && typeof serviceAccount.private_key === "string" && serviceAccount.private_key.includes("\\n")) {
+          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
+        }
         credential = cert(serviceAccount);
       } else {
         throw new Error(`Firebase service account file not found at: ${resolvedPath}`);
       }
     }
-    // 2. Check for Service Account JSON string in environment variable
-    else if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-      try {
-        let rawKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY.trim();
-        // Support base64 encoded service account string
-        if (!rawKey.startsWith("{") && !rawKey.startsWith("[")) {
-          try {
-            rawKey = Buffer.from(rawKey, "base64").toString("utf8");
-          } catch (e) {}
-        }
-        const serviceAccount = JSON.parse(rawKey);
-        credential = cert(serviceAccount);
-      } catch (parseErr) {
-        throw new Error("Invalid JSON in FIREBASE_SERVICE_ACCOUNT_KEY environment variable.");
-      }
-    }
-    // 3. Attempt Application Default Credentials (ADC)
+    // 4. Attempt Application Default Credentials (ADC)
     else {
       const defaultAdcPath = path.join(
         process.env.HOME || process.env.USERPROFILE || "",

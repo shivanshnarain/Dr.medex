@@ -1219,7 +1219,8 @@ router.get("/reviews", async (req, res) => {
     const result = await firestoreService.getApprovedReviews(productId, { limit, offset });
     res.json({ success: true, ...result });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.warn("[Reviews API] Could not retrieve reviews:", err.message);
+    res.json({ success: true, reviews: [], hasMore: false, message: err.message });
   }
 });
 
@@ -1448,7 +1449,8 @@ router.get("/reviews/:productId", async (req, res) => {
     const result = await firestoreService.getApprovedReviews(req.params.productId, { limit, offset });
     res.json({ success: true, ...result });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.warn(`[Reviews API] Could not retrieve reviews for ${req.params.productId}:`, err.message);
+    res.json({ success: true, reviews: [], hasMore: false, message: err.message });
   }
 });
 
@@ -1839,7 +1841,19 @@ router.post("/reviews", async (req, res) => {
 
     const parsedRating = Math.min(5, Math.max(1, Math.round(Number(rating) || 5)));
     const cleanEmail = String(userEmail || "").trim().toLowerCase().substring(0, 150);
-    const cleanUserId = String(userId || "anonymous").trim().substring(0, 128);
+    const cleanUserId = String(userId || "").trim().substring(0, 128);
+
+    // Require authentication: Do not allow anonymous review submissions
+    const isAnonymous =
+      cleanUserId === "anonymous" ||
+      (!cleanEmail && !cleanUserId && !req.headers.authorization && (!customerName || String(customerName).toLowerCase().includes("anonymous")));
+
+    if (isAnonymous) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required. Please sign in to submit a review."
+      });
+    }
 
     let cleanName = String(customerName || author || "").trim().substring(0, 100);
     if (!cleanName && cleanEmail) {

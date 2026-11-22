@@ -33,16 +33,20 @@ async function runTests() {
   );
 
   assert.ok(
-    reviewSectionCode.includes('backgroundColor: "#7AA05A"'),
-    "Card background must be exact #7AA05A (user-specified Moss Green)"
+    reviewSectionCode.includes("bg-[#2D5A4A]") || reviewSectionCode.includes("#2D5A4A"),
+    "Selected card background must be dark green #2D5A4A"
   );
   assert.ok(
-    reviewSectionCode.includes("border-[#0D4C3C]"),
-    "Card border/outline must be exact #0D4C3C"
+    reviewSectionCode.includes("bg-white") || reviewSectionCode.includes("#FFFFFF"),
+    "Unselected card background must be pure white #FFFFFF"
   );
   assert.ok(
-    reviewSectionCode.includes("text-[#FFFFFF]") || reviewSectionCode.includes("text-white"),
-    "Card text must be pure white #FFFFFF"
+    reviewSectionCode.includes("#7AA05A"),
+    "Unselected card border must be thin light-green outline #7AA05A"
+  );
+  assert.ok(
+    reviewSectionCode.includes("text-white") && reviewSectionCode.includes("text-[#171717]"),
+    "Card text must support white on selected and #171717 on unselected"
   );
   assert.ok(
     reviewSectionCode.includes("#F59E0B"),
