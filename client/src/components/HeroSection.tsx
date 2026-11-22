@@ -77,6 +77,28 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
 
+  const [cardsVisible, setCardsVisible] = useState(false);
+  const cardsContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const node = cardsContainerRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setCardsVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setCardsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.15, rootMargin: "0px 0px -40px 0px" }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   // Reset image zoom state when category slide changes
   useEffect(() => {
     setIsMainCardZoomed(false);
@@ -219,40 +241,50 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
               <span>TRUSTED MEDICAL EQUIPMENT PARTNER</span>
             </div>
 
-            {/* Main Heading: Line 1: Advanced Medical | Line 2: Technology for Better Care + ECG */}
-            <h1 className="text-3xl sm:text-4xl lg:text-[46px] xl:text-[50px] leading-[1.15] mb-4 sm:mb-5">
-              {/* Line 1: Advanced Medical on one single line */}
-              <span className="block font-light italic text-black tracking-tight whitespace-nowrap">
-                Advanced{" "}
-                <span className="font-extrabold italic text-black">Medical</span>
+            {/* Main Heading: Exactly THREE Lines */}
+            <h1 className="text-3xl sm:text-4xl lg:text-[46px] xl:text-[50px] leading-[1.18] mb-3 sm:mb-4">
+              {/* Line 1: Advanced Medical on first line */}
+              <span className="block tracking-tight whitespace-nowrap">
+                <span className="font-light italic text-black">Advanced</span>{" "}
+                <span
+                  className="inline-flex items-center justify-center px-2.5 sm:px-3.5 py-0.5 rounded-lg sm:rounded-xl font-bold italic text-white tracking-tight shadow-xs"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, #7AA05A 0%, #2D5A4A 50%, #7AA05A 100%)",
+                  }}
+                >
+                  Medical
+                </span>
               </span>
 
-              {/* Line 2: Technology for Better Care + ECG */}
-              <span className="inline-flex items-center flex-wrap gap-2 sm:gap-2.5 mt-1 sm:mt-1.5">
-                <span className="font-light italic text-black tracking-tight">
-                  Technology for
-                </span>{" "}
+              {/* Line 2: Technology for entirely on the second line */}
+              <span className="block font-light italic text-black tracking-tight mt-1 sm:mt-1.5">
+                Technology for
+              </span>
+
+              {/* Line 3: Better Care + ECG LOGO on the third line */}
+              <span className="inline-flex items-center flex-wrap sm:flex-nowrap gap-3 sm:gap-4 mt-1 sm:mt-1.5">
                 <span
                   className="font-black italic tracking-tight shrink-0"
-                  style={{ color: "#C84A4A" }}
+                  style={{ color: "#C62828" }}
                 >
                   Better Care
                 </span>
 
-                {/* 5. DR.MEDEX Green Glowing ECG Pulse Logo Asset */}
+                {/* DR.MEDEX ECG Pulse Logo: Noticeably larger, clearly visible, vertically centered */}
                 <img
                   src={ecgPulseImage}
                   alt=""
                   aria-hidden="true"
-                  className="inline-block shrink-0 h-6 sm:h-7 lg:h-8 xl:h-8.5 w-auto max-w-[28vw] sm:max-w-none object-contain select-none -translate-y-0.5 sm:-translate-y-1 pointer-events-none"
+                  className="inline-block shrink-0 h-8 sm:h-10 lg:h-12 w-auto max-w-[32vw] sm:max-w-none object-contain select-none -translate-y-0.5 pointer-events-none"
                   loading="eager"
                   decoding="async"
                 />
               </span>
             </h1>
 
-            {/* Supporting Tagline */}
-            <p className="text-base sm:text-lg text-[#333333] font-medium tracking-tight mb-2 sm:mb-3">
+            {/* Supporting Tagline: Smaller, lighter, light MEDEX green (#7AA05A) */}
+            <p className="text-xs sm:text-sm font-normal text-[#7AA05A] tracking-normal mt-3 sm:mt-4 mb-0">
               Reliable Equipment. Better Care.
             </p>
           </div>
@@ -464,54 +496,67 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
 
         </div>
 
-        {/* THREE BENEFIT CARDS DIRECTLY BELOW THE HERO: CONTINUOUS DARK-GREEN BG, SQUARE EDGES, CRISP WHITE SEPARATORS */}
-        <div className="mt-12 sm:mt-16 lg:mt-20 mx-4 sm:mx-0 bg-[#2D5A4A] rounded-none overflow-hidden grid grid-cols-1 md:grid-cols-3 divide-y-2 md:divide-y-0 md:divide-x-2 divide-white">
-
-          {/* Card 1 */}
-          <div className="p-6 sm:p-8 lg:p-10 flex flex-col justify-between bg-[#2D5A4A]">
-            <div>
-              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 mb-4 sm:mb-5 shadow-xs">
-                <ShieldCheck size={26} className="text-[#F4B400]" style={{ color: "#F4B400" }} />
-              </div>
-              <h3 className="text-lg sm:text-xl font-bold text-white mb-2">
+        {/* THREE FEATURE CARDS DIRECTLY BELOW THE HERO: HORIZONTAL ICON + TEXT LAYOUT WITH DIRECTIONAL ENTRANCE ANIMATIONS */}
+        <div
+          ref={cardsContainerRef}
+          className="mt-12 sm:mt-16 lg:mt-20 mx-4 sm:mx-0 bg-[#2D5A4A] rounded-none overflow-hidden grid grid-cols-1 md:grid-cols-3 divide-y-2 md:divide-y-0 md:divide-x-2 divide-white"
+        >
+          {/* Card 1: Trusted Medical Equipment (Left to right entrance) */}
+          <div
+            className={`p-6 sm:p-7 lg:p-8 flex items-center gap-4 sm:gap-5 bg-[#2D5A4A] transition-all duration-500 ease-out motion-reduce:transform-none motion-reduce:transition-none motion-reduce:opacity-100 ${
+              cardsVisible ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-8 sm:-translate-x-12"
+            }`}
+          >
+            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 shadow-xs">
+              <ShieldCheck size={26} className="text-[#F4B400]" style={{ color: "#F4B400" }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base sm:text-lg font-bold text-white mb-1 leading-snug">
                 Trusted Medical Equipment
               </h3>
-              <p className="text-white/90 text-xs sm:text-sm leading-relaxed">
+              <p className="text-white/90 text-xs sm:text-[13px] leading-relaxed">
                 Reliable medical equipment designed to support hospitals, clinics and healthcare professionals with confidence.
               </p>
             </div>
           </div>
 
-          {/* Card 2 */}
-          <div className="p-6 sm:p-8 lg:p-10 flex flex-col justify-between bg-[#2D5A4A]">
-            <div>
-              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 mb-4 sm:mb-5 shadow-xs">
-                <Cpu size={26} className="text-[#F4B400]" style={{ color: "#F4B400" }} />
-              </div>
-              <h3 className="text-lg sm:text-xl font-bold text-white mb-2">
+          {/* Card 2: Advanced Medical Technology (Right to left entrance) */}
+          <div
+            className={`p-6 sm:p-7 lg:p-8 flex items-center gap-4 sm:gap-5 bg-[#2D5A4A] transition-all duration-500 ease-out motion-reduce:transform-none motion-reduce:transition-none motion-reduce:opacity-100 ${
+              cardsVisible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-8 sm:translate-x-12"
+            }`}
+          >
+            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 shadow-xs">
+              <Cpu size={26} className="text-[#F4B400]" style={{ color: "#F4B400" }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base sm:text-lg font-bold text-white mb-1 leading-snug">
                 Advanced Medical Technology
               </h3>
-              <p className="text-white/90 text-xs sm:text-sm leading-relaxed">
+              <p className="text-white/90 text-xs sm:text-[13px] leading-relaxed">
                 Explore precision-engineered medical solutions built for modern healthcare environments and clinical requirements.
               </p>
             </div>
           </div>
 
-          {/* Card 3 */}
-          <div className="p-6 sm:p-8 lg:p-10 flex flex-col justify-between bg-[#2D5A4A]">
-            <div>
-              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 mb-4 sm:mb-5 shadow-xs">
-                <Award size={26} className="text-[#F4B400]" style={{ color: "#F4B400" }} />
-              </div>
-              <h3 className="text-lg sm:text-xl font-bold text-white mb-2">
+          {/* Card 3: Healthcare Excellence (Left to right entrance) */}
+          <div
+            className={`p-6 sm:p-7 lg:p-8 flex items-center gap-4 sm:gap-5 bg-[#2D5A4A] transition-all duration-500 ease-out motion-reduce:transform-none motion-reduce:transition-none motion-reduce:opacity-100 ${
+              cardsVisible ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-8 sm:-translate-x-12"
+            }`}
+          >
+            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 shadow-xs">
+              <Award size={26} className="text-[#F4B400]" style={{ color: "#F4B400" }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base sm:text-lg font-bold text-white mb-1 leading-snug">
                 Healthcare Excellence
               </h3>
-              <p className="text-white/90 text-xs sm:text-sm leading-relaxed">
+              <p className="text-white/90 text-xs sm:text-[13px] leading-relaxed">
                 Supporting healthcare professionals with dependable equipment, professional service and quality-focused solutions.
               </p>
             </div>
           </div>
-
         </div>
 
       </div>

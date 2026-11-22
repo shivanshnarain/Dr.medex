@@ -11,78 +11,121 @@ import {
   ArrowRight
 } from "lucide-react";
 
-export const ServiceBenefitsBanner: React.FC = () => (
-  <section
-    aria-label="DR.MEDEX Global Service Benefits"
-    className="bg-white py-8 sm:py-10 lg:py-12"
-  >
-    {/* Bounded in max-w-[1400px] with matching white outer left/right margins */}
-    <div className="max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8">
-      {/* Full-height continuous white dividers matching the upper 3-card benefit section */}
-      <div className="bg-[#2D5A4A] rounded-none overflow-hidden grid grid-cols-1 md:grid-cols-4 divide-y-2 md:divide-y-0 md:divide-x-2 divide-white">
-        {/* Benefit 1 */}
-        <div className="flex items-start gap-4 py-8 sm:py-9 lg:py-10 px-5 sm:px-6 lg:px-7 bg-[#2D5A4A] h-full w-full">
-          <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 shadow-xs">
-            <Globe size={24} className="text-[#F4B400]" style={{ color: "#F4B400" }} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h4 className="text-sm sm:text-[15px] font-bold text-white uppercase tracking-wider leading-snug">
-              Worldwide Air Delivery
-            </h4>
-            <p className="text-xs text-white/95 mt-1.5 leading-relaxed">
-              Secure, export-ready packaging and international shipping support for medical equipment orders worldwide.
-            </p>
-          </div>
-        </div>
+export const ServiceBenefitsBanner: React.FC = () => {
+  const [isVisible, setIsVisible] = React.useState(false);
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
-        {/* Benefit 2 */}
-        <div className="flex items-start gap-4 py-8 sm:py-9 lg:py-10 px-5 sm:px-6 lg:px-7 bg-[#2D5A4A] h-full w-full">
-          <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 shadow-xs">
-            <ShieldCheck size={24} className="text-[#F4B400]" style={{ color: "#F4B400" }} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h4 className="text-sm sm:text-[15px] font-bold text-white uppercase tracking-wider leading-snug">
-              Certified Medical Quality
-            </h4>
-            <p className="text-xs text-white/95 mt-1.5 leading-relaxed">
-              Quality-focused medical equipment manufactured and supplied with attention to applicable medical-device standards.
-            </p>
-          </div>
-        </div>
+  React.useEffect(() => {
+    const node = containerRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setIsVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.15, rootMargin: "0px 0px -40px 0px" }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
-        {/* Benefit 3 */}
-        <div className="flex items-start gap-4 py-8 sm:py-9 lg:py-10 px-5 sm:px-6 lg:px-7 bg-[#2D5A4A] h-full w-full">
-          <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 shadow-xs">
-            <Award size={24} className="text-[#F4B400]" style={{ color: "#F4B400" }} />
+  return (
+    <section
+      aria-label="DR.MEDEX Global Service Benefits"
+      className="bg-white py-8 sm:py-10 lg:py-12 overflow-hidden"
+    >
+      {/* Bounded in max-w-[1400px] with matching white outer left/right margins */}
+      <div className="max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Full-height continuous white dividers matching the upper 3-card benefit section */}
+        <div
+          ref={containerRef}
+          className="bg-[#2D5A4A] rounded-none overflow-hidden grid grid-cols-1 md:grid-cols-4 divide-y-2 md:divide-y-0 md:divide-x-2 divide-white"
+        >
+          {/* Benefit 1: Left to right entrance */}
+          <div
+            className={`flex items-center gap-4 py-8 sm:py-9 lg:py-10 px-5 sm:px-6 lg:px-7 bg-[#2D5A4A] h-full w-full transition-all duration-500 ease-out motion-reduce:transform-none motion-reduce:transition-none motion-reduce:opacity-100 ${
+              isVisible ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-6 sm:-translate-x-10"
+            }`}
+          >
+            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 shadow-xs">
+              <Globe size={24} className="text-[#F4B400]" style={{ color: "#F4B400" }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm sm:text-[15px] font-bold text-white uppercase tracking-wider leading-snug">
+                Worldwide Air Delivery
+              </h4>
+              <p className="text-xs text-white/95 mt-1.5 leading-relaxed">
+                Secure, export-ready packaging and international shipping support for medical equipment orders worldwide.
+              </p>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <h4 className="text-sm sm:text-[15px] font-bold text-white uppercase tracking-wider leading-snug">
-              5-Year OEM Warranty
-            </h4>
-            <p className="text-xs text-white/95 mt-1.5 leading-relaxed">
-              Up to 5-year OEM warranty on eligible products, subject to the manufacturer’s warranty terms.
-            </p>
-          </div>
-        </div>
 
-        {/* Benefit 4 */}
-        <div className="flex items-start gap-4 py-8 sm:py-9 lg:py-10 px-5 sm:px-6 lg:px-7 bg-[#2D5A4A] h-full w-full">
-          <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 shadow-xs">
-            <Wrench size={24} className="text-[#F4B400]" style={{ color: "#F4B400" }} />
+          {/* Benefit 2: Right to left entrance */}
+          <div
+            className={`flex items-center gap-4 py-8 sm:py-9 lg:py-10 px-5 sm:px-6 lg:px-7 bg-[#2D5A4A] h-full w-full transition-all duration-500 ease-out motion-reduce:transform-none motion-reduce:transition-none motion-reduce:opacity-100 ${
+              isVisible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-6 sm:translate-x-10"
+            }`}
+          >
+            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 shadow-xs">
+              <ShieldCheck size={24} className="text-[#F4B400]" style={{ color: "#F4B400" }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm sm:text-[15px] font-bold text-white uppercase tracking-wider leading-snug">
+                Certified Medical Quality
+              </h4>
+              <p className="text-xs text-white/95 mt-1.5 leading-relaxed">
+                Quality-focused medical equipment manufactured and supplied with attention to applicable medical-device standards.
+              </p>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <h4 className="text-sm sm:text-[15px] font-bold text-white uppercase tracking-wider leading-snug">
-              Engineering &amp; Technical Support
-            </h4>
-            <p className="text-xs text-white/95 mt-1.5 leading-relaxed">
-              Technical assistance, equipment guidance and after-sales support for hospitals, clinics and healthcare professionals.
-            </p>
+
+          {/* Benefit 3: Left to right entrance */}
+          <div
+            className={`flex items-center gap-4 py-8 sm:py-9 lg:py-10 px-5 sm:px-6 lg:px-7 bg-[#2D5A4A] h-full w-full transition-all duration-500 ease-out motion-reduce:transform-none motion-reduce:transition-none motion-reduce:opacity-100 ${
+              isVisible ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-6 sm:-translate-x-10"
+            }`}
+          >
+            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 shadow-xs">
+              <Award size={24} className="text-[#F4B400]" style={{ color: "#F4B400" }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm sm:text-[15px] font-bold text-white uppercase tracking-wider leading-snug">
+                5-Year OEM Warranty
+              </h4>
+              <p className="text-xs text-white/95 mt-1.5 leading-relaxed">
+                Up to 5-year OEM warranty on eligible products, subject to the manufacturer’s warranty terms.
+              </p>
+            </div>
+          </div>
+
+          {/* Benefit 4: Right to left entrance */}
+          <div
+            className={`flex items-center gap-4 py-8 sm:py-9 lg:py-10 px-5 sm:px-6 lg:px-7 bg-[#2D5A4A] h-full w-full transition-all duration-500 ease-out motion-reduce:transform-none motion-reduce:transition-none motion-reduce:opacity-100 ${
+              isVisible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-6 sm:translate-x-10"
+            }`}
+          >
+            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shrink-0 shadow-xs">
+              <Wrench size={24} className="text-[#F4B400]" style={{ color: "#F4B400" }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm sm:text-[15px] font-bold text-white uppercase tracking-wider leading-snug">
+                Engineering &amp; Technical Support
+              </h4>
+              <p className="text-xs text-white/95 mt-1.5 leading-relaxed">
+                Technical assistance, equipment guidance and after-sales support for hospitals, clinics and healthcare professionals.
+              </p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 
 export const Footer: React.FC = () => {
   const { pathname } = useLocation();
